@@ -6,7 +6,7 @@ use std::{
 
 use crossterm::{
     cursor::MoveTo,
-    event::{read, KeyCode},
+    event::{read, Event, KeyCode, KeyModifiers},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, size, Clear, ClearType},
 };
@@ -14,6 +14,8 @@ use crossterm::{
 struct Editor {
     should_quit: bool,
     document: Document,
+    position_x: u16,
+    position_y: u16,
 }
 
 impl Editor {
@@ -25,19 +27,61 @@ impl Editor {
         Self {
             should_quit: false,
             document,
+            position_x: 0,
+            position_y: 0,
         }
     }
+
     fn run(&mut self) -> Result<()> {
         loop {
             self.refresh_screen()?;
             let event = read()?;
-            let key = event.as_key_event().unwrap();
-            if key.code == KeyCode::Esc {
-                self.should_quit = true;
-            }
+            self.handler_event(event);
+
+            // Exit
             if self.should_quit {
                 break Ok(());
             }
+        }
+    }
+
+    fn current_row_len(&self) -> u16 {
+        self.document
+            .rows
+            .get(self.position_y as usize)
+            .map_or(0, |line| line.len()) as u16
+    }
+
+    fn handler_event(&mut self, event: Event) {
+        let key = event.as_key_event().unwrap();
+        match key.code {
+            // Exit (ctrl+q)
+            KeyCode::Char('q') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.should_quit = true
+            }
+            // Move left
+            KeyCode::Char('h') => self.position_x = self.position_x.saturating_sub(1),
+            // Move down
+            KeyCode::Char('j') => {
+                if (self.position_y as usize) + 1 < self.document.rows.len() {
+                    self.position_y = self.position_y.saturating_add(1)
+                }
+                if self.current_row_len() <= self.position_x {
+                    self.position_x = self.current_row_len().saturating_sub(1);
+                }
+            }
+            // Move up
+            KeyCode::Char('k') => {
+                self.position_y = self.position_y.saturating_sub(1);
+                if self.current_row_len() <= self.position_x {
+                    self.position_x = self.current_row_len().saturating_sub(1);
+                }
+            }
+            // Move right
+            KeyCode::Char('l') if self.current_row_len() > self.position_x.saturating_add(1) => {
+                self.position_x = self.position_x.saturating_add(1)
+            }
+            _ => {}
         }
     }
 
@@ -56,12 +100,17 @@ impl Editor {
         self.set_cursor(0, 0)?;
         let (_, rows) = size()?;
         for i in 0..rows {
-            match self.document.rows.get(i as usize) {
-                Some(line) => print!("{line}\r\n"),
-                None => print!("~\r\n"),
+            let content = match self.document.rows.get(i as usize) {
+                Some(line) => line.as_str(), // &String → &str
+                None => "~",
+            };
+            if i < rows - 1 {
+                print!("{content}\r\n");
+            } else {
+                print!("{content}");
             }
         }
-        self.set_cursor(0, 0)?;
+        self.set_cursor(self.position_x, self.position_y)?;
         Ok(())
     }
 }
