@@ -100,6 +100,7 @@ impl Editor {
                 self.document
                     .insert_char(self.position_x, self.position_y, c);
                 self.position_x += 1;
+                self.document.dirty = true;
             }
             _ => {}
         }
@@ -110,6 +111,10 @@ impl Editor {
         self.awaiting_g = false;
 
         match key.code {
+            // Save document (ctrl+s)
+            KeyCode::Char('s') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.document.save();
+            }
             // Exit (ctrl+q)
             KeyCode::Char('q') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 self.should_quit = true
@@ -263,17 +268,27 @@ impl Drop for RawModeGuard {
 
 struct Document {
     rows: Vec<String>,
+    filename: Option<String>,
+    dirty: bool,
 }
 
 impl Document {
     fn open(filename: &str) -> Result<Self> {
         let text = read_to_string(filename)?;
         let rows = text.lines().map(|line| line.to_string()).collect();
-        Ok(Self { rows })
+        Ok(Self {
+            rows,
+            filename: Some(filename.to_string()),
+            dirty: false,
+        })
     }
 
     fn empty() -> Self {
-        Self { rows: Vec::new() }
+        Self {
+            rows: Vec::new(),
+            filename: None,
+            dirty: false,
+        }
     }
 
     fn insert_char(&mut self, x: u16, y: u16, ch: char) {
@@ -311,6 +326,14 @@ impl Document {
         }
         let current = self.rows.remove(y);
         self.rows[y - 1].push_str(&current);
+    }
+
+    fn save(&mut self) {
+        if let Some(name) = &self.filename {
+            let contents = self.rows.join("\n");
+            std::fs::write(name, contents);
+            self.dirty = false;
+        }
     }
 }
 
