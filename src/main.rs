@@ -1,5 +1,6 @@
 use std::{
     self,
+    fs::read_to_string,
     io::{stdout, Result},
 };
 
@@ -12,11 +13,19 @@ use crossterm::{
 
 struct Editor {
     should_quit: bool,
+    document: Document,
 }
 
 impl Editor {
     fn new() -> Self {
-        Self { should_quit: false }
+        let document = match std::env::args().nth(1) {
+            Some(filename) => Document::open(&filename).unwrap_or_else(|_| Document::empty()),
+            None => Document::empty(),
+        };
+        Self {
+            should_quit: false,
+            document,
+        }
     }
     fn run(&mut self) -> Result<()> {
         loop {
@@ -46,8 +55,11 @@ impl Editor {
         self.clear_screen()?;
         self.set_cursor(0, 0)?;
         let (_, rows) = size()?;
-        for _ in 0..rows {
-            print!("~\r\n");
+        for i in 0..rows {
+            match self.document.rows.get(i as usize) {
+                Some(line) => print!("{line}\r\n"),
+                None => print!("~\r\n"),
+            }
         }
         self.set_cursor(0, 0)?;
         Ok(())
@@ -66,6 +78,22 @@ impl RawModeGuard {
 impl Drop for RawModeGuard {
     fn drop(&mut self) {
         let _ = disable_raw_mode();
+    }
+}
+
+struct Document {
+    rows: Vec<String>,
+}
+
+impl Document {
+    fn open(filename: &str) -> Result<Self> {
+        let text = read_to_string(filename)?;
+        let rows = text.lines().map(|line| line.to_string()).collect();
+        Ok(Self { rows })
+    }
+
+    fn empty() -> Self {
+        Self { rows: Vec::new() }
     }
 }
 
