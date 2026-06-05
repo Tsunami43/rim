@@ -78,6 +78,11 @@ impl Editor {
         match key.code {
             // Switch mode to Normal
             KeyCode::Esc => self.mode = Mode::Normal,
+            KeyCode::Char(c) => {
+                self.document
+                    .insert_char(self.position_x, self.position_y, c);
+                self.position_x += 1;
+            }
             _ => {}
         }
     }
@@ -251,6 +256,15 @@ impl Document {
 
     fn empty() -> Self {
         Self { rows: Vec::new() }
+    }
+
+    fn insert_char(&mut self, x: u16, y: u16, ch: char) {
+        if self.rows.is_empty() {
+            self.rows.push(String::new());
+        }
+        if let Some(row) = self.rows.get_mut(y as usize) {
+            row.insert(x as usize, ch);
+        }
     }
 }
 
