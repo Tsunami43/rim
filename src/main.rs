@@ -16,6 +16,8 @@ struct Editor {
     document: Document,
     position_x: u16,
     position_y: u16,
+    offset_x: u16,
+    offset_y: u16,
 }
 
 impl Editor {
@@ -29,6 +31,8 @@ impl Editor {
             document,
             position_x: 0,
             position_y: 0,
+            offset_x: 0,
+            offset_y: 0,
         }
     }
 
@@ -95,14 +99,20 @@ impl Editor {
         Ok(())
     }
 
-    fn refresh_screen(&self) -> Result<()> {
+    fn refresh_screen(&mut self) -> Result<()> {
         self.clear_screen()?;
+        self.scroll();
         self.set_cursor(0, 0)?;
-        let (_, rows) = size()?;
+        let (cols, rows) = size()?;
         for i in 0..rows {
-            let content = match self.document.rows.get(i as usize) {
-                Some(line) => line.as_str(), // &String → &str
-                None => "~",
+            let doc_row = self.offset_y as usize + i as usize;
+            let content: String = match self.document.rows.get(doc_row) {
+                Some(line) => line
+                    .chars()
+                    .skip(self.offset_x as usize)
+                    .take(cols as usize)
+                    .collect(),
+                None => "~".to_string(),
             };
             if i < rows - 1 {
                 print!("{content}\r\n");
@@ -110,8 +120,27 @@ impl Editor {
                 print!("{content}");
             }
         }
-        self.set_cursor(self.position_x, self.position_y)?;
+        self.set_cursor(
+            self.position_x - self.offset_x,
+            self.position_y - self.offset_y,
+        )?;
         Ok(())
+    }
+
+    fn scroll(&mut self) {
+        let (cols, rows) = size().unwrap();
+        // Vertical
+        if self.position_y < self.offset_y {
+            self.offset_y = self.position_y;
+        } else if self.position_y >= self.offset_y + rows {
+            self.offset_y = self.position_y - rows + 1;
+        }
+        // Horizontal
+        if self.position_x < self.offset_x {
+            self.offset_x = self.position_x;
+        } else if self.position_x >= self.offset_x + cols {
+            self.offset_x = self.position_x - cols + 1;
+        }
     }
 }
 
