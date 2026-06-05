@@ -78,6 +78,24 @@ impl Editor {
         match key.code {
             // Switch mode to Normal
             KeyCode::Esc => self.mode = Mode::Normal,
+            KeyCode::Backspace => {
+                if self.position_x > 0 {
+                    self.document
+                        .delete_char(self.position_x - 1, self.position_y);
+                    self.position_x -= 1;
+                } else if self.position_y > 0 {
+                    let prev_len = self.document.line_len(self.position_y - 1);
+                    self.document.join_line(self.position_y);
+                    self.position_y -= 1;
+                    self.position_x = prev_len;
+                }
+            }
+            KeyCode::Enter => {
+                self.document
+                    .insert_newline(self.position_x, self.position_y);
+                self.position_y += 1;
+                self.position_x = 0;
+            }
             KeyCode::Char(c) => {
                 self.document
                     .insert_char(self.position_x, self.position_y, c);
@@ -265,6 +283,34 @@ impl Document {
         if let Some(row) = self.rows.get_mut(y as usize) {
             row.insert(x as usize, ch);
         }
+    }
+
+    fn delete_char(&mut self, x: u16, y: u16) {
+        if let Some(row) = self.rows.get_mut(y as usize) {
+            row.remove(x as usize);
+        }
+    }
+    fn line_len(&self, y: u16) -> u16 {
+        self.rows.get(y as usize).map_or(0, |row| row.len()) as u16
+    }
+
+    fn insert_newline(&mut self, x: u16, y: u16) {
+        let y = y as usize;
+        if y >= self.rows.len() {
+            self.rows.push(String::new());
+            return;
+        }
+        let rest = self.rows[y].split_off(x as usize);
+        self.rows.insert(y + 1, rest);
+    }
+
+    fn join_line(&mut self, y: u16) {
+        let y = y as usize;
+        if y == 0 || y >= self.rows.len() {
+            return;
+        }
+        let current = self.rows.remove(y);
+        self.rows[y - 1].push_str(&current);
     }
 }
 
