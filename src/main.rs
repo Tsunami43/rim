@@ -6,14 +6,21 @@ use std::{
 
 use crossterm::{
     cursor::MoveTo,
-    event::{read, Event, KeyCode, KeyModifiers},
+    event::{read, Event, KeyCode, KeyEvent, KeyModifiers},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, size, Clear, ClearType},
 };
 
+#[derive(Clone, Debug, Copy, PartialEq)]
+enum Mode {
+    Normal,
+    Insert,
+}
+
 struct Editor {
     should_quit: bool,
     document: Document,
+    mode: Mode,
     position_x: u16,
     position_y: u16,
     offset_x: u16,
@@ -29,6 +36,7 @@ impl Editor {
         Self {
             should_quit: false,
             document,
+            mode: Mode::Normal,
             position_x: 0,
             position_y: 0,
             offset_x: 0,
@@ -40,7 +48,7 @@ impl Editor {
         loop {
             self.refresh_screen()?;
             let event = read()?;
-            self.handler_event(event);
+            self.dispatcher(event);
 
             // Exit
             if self.should_quit {
@@ -56,13 +64,30 @@ impl Editor {
             .map_or(0, |line| line.len()) as u16
     }
 
-    fn handler_event(&mut self, event: Event) {
+    fn dispatcher(&mut self, event: Event) {
         let key = event.as_key_event().unwrap();
+        match self.mode {
+            Mode::Normal => self.handler_normal(key),
+            Mode::Insert => self.handler_insert(key),
+        }
+    }
+
+    fn handler_insert(&mut self, key: KeyEvent) {
+        match key.code {
+            // Switch mode to Normal
+            KeyCode::Esc => self.mode = Mode::Normal,
+            _ => {}
+        }
+    }
+
+    fn handler_normal(&mut self, key: KeyEvent) {
         match key.code {
             // Exit (ctrl+q)
             KeyCode::Char('q') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 self.should_quit = true
             }
+            // Switch mode to Insert
+            KeyCode::Char('I') => self.mode = Mode::Insert,
             // Move left
             KeyCode::Char('h') => self.position_x = self.position_x.saturating_sub(1),
             // Move down
@@ -104,7 +129,7 @@ impl Editor {
         self.scroll();
         self.set_cursor(0, 0)?;
         let (cols, rows) = size()?;
-        for i in 0..rows {
+        for i in 0..rows - 1 {
             let doc_row = self.offset_y as usize + i as usize;
             let content: String = match self.document.rows.get(doc_row) {
                 Some(line) => line
@@ -114,12 +139,9 @@ impl Editor {
                     .collect(),
                 None => "~".to_string(),
             };
-            if i < rows - 1 {
-                print!("{content}\r\n");
-            } else {
-                print!("{content}");
-            }
+            print!("{content}\r\n");
         }
+        print!("--- Mode: {:?} ---", self.mode);
         self.set_cursor(
             self.position_x - self.offset_x,
             self.position_y - self.offset_y,
@@ -129,11 +151,12 @@ impl Editor {
 
     fn scroll(&mut self) {
         let (cols, rows) = size().unwrap();
+        let text_rows = rows - 1;
         // Vertical
         if self.position_y < self.offset_y {
             self.offset_y = self.position_y;
-        } else if self.position_y >= self.offset_y + rows {
-            self.offset_y = self.position_y - rows + 1;
+        } else if self.position_y >= self.offset_y + text_rows {
+            self.offset_y = self.position_y - text_rows + 1;
         }
         // Horizontal
         if self.position_x < self.offset_x {
