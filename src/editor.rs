@@ -1,21 +1,64 @@
 use std::{
     self,
-    io::{stdout, Result, Write},
+    io::{Result, Write, stdout},
 };
 
 use crate::document::Document;
 
 use crossterm::{
     cursor::{Hide, MoveTo, Show},
-    event::{read, Event, KeyCode, KeyEvent, KeyModifiers},
+    event::{Event, KeyCode, KeyEvent, KeyModifiers, read},
     queue,
-    terminal::{size, Clear, ClearType},
+    terminal::{Clear, ClearType, size},
 };
 
 #[derive(Clone, Debug, Copy, PartialEq)]
 enum Mode {
     Normal,
     Insert,
+    Command,
+}
+
+#[derive(Clone, Debug, Copy, PartialEq)]
+pub enum Command {
+    Save,
+    Quit,
+    SaveQuit,
+    Unknown,
+}
+
+pub struct CommandLine {
+    buffer: String,
+}
+
+impl CommandLine {
+    fn new() -> Self {
+        Self {
+            buffer: String::new(),
+        }
+    }
+
+    pub fn push(&mut self, c: char) {
+        self.buffer.push(c);
+    }
+
+    pub fn pop(&mut self) {
+        self.buffer.pop();
+    }
+
+    pub fn clear(&mut self) {
+        self.buffer.clear();
+    }
+
+    pub fn parse(&self) -> Command {
+        match self.buffer.as_str() {
+            "w" => Command::Save,
+            "q" => Command::Quit,
+            "wq" => Command::SaveQuit,
+            "qw" => Command::SaveQuit,
+            _ => Command::Unknown,
+        }
+    }
 }
 
 pub struct Editor {
@@ -27,6 +70,7 @@ pub struct Editor {
     position_y: u16,
     offset_x: u16,
     offset_y: u16,
+    command_line: CommandLine,
 }
 
 impl Editor {
@@ -44,6 +88,7 @@ impl Editor {
             position_y: 0,
             offset_x: 0,
             offset_y: 0,
+            command_line: CommandLine::new(),
         }
     }
 
@@ -72,6 +117,47 @@ impl Editor {
         match self.mode {
             Mode::Normal => self.handler_normal(key),
             Mode::Insert => self.handler_insert(key),
+            Mode::Command => self.handler_command(key),
+        }
+    }
+
+    pub fn execute_command(&mut self) {
+        match self.command_line.parse() {
+            Command::Save => {
+                let _ = self.document.save();
+            }
+            Command::Quit => self.should_quit = true,
+            Command::SaveQuit => {
+                let _ = self.document.save();
+                self.should_quit = true;
+            }
+            Command::Unknown => {
+            }
+        }
+        self.command_line.clear();
+    }
+
+    pub fn handler_command(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Esc => {
+                self.command_line.clear();
+                self.mode = Mode::Normal;
+            }
+            KeyCode::Backspace => {
+                if !self.command_line.buffer.is_empty() {
+                    self.command_line.pop();
+                } else {
+                    self.mode = Mode::Normal;
+                }
+            }
+            KeyCode::Enter => {
+                self.execute_command();
+                self.mode = Mode::Normal;
+            }
+            KeyCode::Char(c) => {
+                self.command_line.push(c);
+            }
+            _ => {}
         }
     }
 
@@ -111,6 +197,9 @@ impl Editor {
         self.awaiting_g = false;
 
         match key.code {
+            KeyCode::Char(':') => {
+                self.mode = Mode::Command;
+            }
             // Save document (ctrl+s)
             KeyCode::Char('s') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 let _ = self.document.save();
@@ -190,7 +279,6 @@ impl Editor {
             _ => {}
         }
     }
-
 
     pub fn refresh_screen(&mut self) -> Result<()> {
         self.scroll();
