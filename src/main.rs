@@ -1,13 +1,13 @@
 use std::{
     self,
     fs::read_to_string,
-    io::{stdout, Result},
+    io::{stdout, Result, Write},
 };
 
 use crossterm::{
-    cursor::MoveTo,
+    cursor::{Hide, MoveTo, Show},
     event::{read, Event, KeyCode, KeyEvent, KeyModifiers},
-    execute,
+    queue,
     terminal::{disable_raw_mode, enable_raw_mode, size, Clear, ClearType},
 };
 
@@ -190,22 +190,26 @@ impl Editor {
         }
     }
 
-    fn set_cursor(&self, x: u16, y: u16) -> Result<()> {
-        execute!(stdout(), MoveTo(x, y))?;
-        Ok(())
-    }
-
-    fn clear_screen(&self) -> Result<()> {
-        execute!(stdout(), Clear(ClearType::All))?;
-        Ok(())
-    }
+    // fn set_cursor(&self, x: u16, y: u16) -> Result<()> {
+    //     execute!(stdout(), MoveTo(x, y))?;
+    //     Ok(())
+    // }
+    //
+    // fn clear_screen(&self) -> Result<()> {
+    //     execute!(stdout(), Clear(ClearType::All))?;
+    //     Ok(())
+    // }
 
     fn refresh_screen(&mut self) -> Result<()> {
-        self.clear_screen()?;
         self.scroll();
-        self.set_cursor(0, 0)?;
         let (cols, rows) = size()?;
+        let mut out = stdout();
+
+        queue!(out, Hide, MoveTo(0, 0))?; // Hide cursor, move to start
+
+        // Document strings
         for i in 0..rows - 1 {
+            queue!(out, Clear(ClearType::CurrentLine))?;
             let doc_row = self.offset_y as usize + i as usize;
             let content: String = match self.document.rows.get(doc_row) {
                 Some(line) => line
@@ -215,13 +219,32 @@ impl Editor {
                     .collect(),
                 None => "~".to_string(),
             };
-            print!("{content}\r\n");
+            write!(out, "{content}\r\n")?;
         }
-        print!("--- Mode: {:?} ---", self.mode);
-        self.set_cursor(
-            self.position_x - self.offset_x,
-            self.position_y - self.offset_y,
+
+        // Status line
+        queue!(out, Clear(ClearType::CurrentLine))?;
+
+        let name = self.document.filename.as_deref().unwrap_or("[No Name]");
+        let modified = if self.document.dirty { " [+]" } else { "" };
+        let status = format!(
+            "{name}{modified} | {:?} | {}:{}",
+            self.mode,
+            self.position_y + 1,
+            self.position_x + 1,
+        );
+        write!(out, "{status}")?;
+
+        // Return cursor
+        queue!(
+            out,
+            MoveTo(
+                self.position_x - self.offset_x,
+                self.position_y - self.offset_y
+            ),
+            Show
         )?;
+        out.flush()?; // Apply changes
         Ok(())
     }
 
