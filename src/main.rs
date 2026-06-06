@@ -100,7 +100,6 @@ impl Editor {
                 self.document
                     .insert_char(self.position_x, self.position_y, c);
                 self.position_x += 1;
-                self.document.dirty = true;
             }
             _ => {}
         }
@@ -113,7 +112,7 @@ impl Editor {
         match key.code {
             // Save document (ctrl+s)
             KeyCode::Char('s') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                self.document.save();
+                let _ = self.document.save();
             }
             // Exit (ctrl+q)
             KeyCode::Char('q') if key.modifiers.contains(KeyModifiers::CONTROL) => {
@@ -298,12 +297,14 @@ impl Document {
         if let Some(row) = self.rows.get_mut(y as usize) {
             row.insert(x as usize, ch);
         }
+        self.dirty = true;
     }
 
     fn delete_char(&mut self, x: u16, y: u16) {
         if let Some(row) = self.rows.get_mut(y as usize) {
             row.remove(x as usize);
         }
+        self.dirty = true;
     }
     fn line_len(&self, y: u16) -> u16 {
         self.rows.get(y as usize).map_or(0, |row| row.len()) as u16
@@ -317,6 +318,7 @@ impl Document {
         }
         let rest = self.rows[y].split_off(x as usize);
         self.rows.insert(y + 1, rest);
+        self.dirty = true;
     }
 
     fn join_line(&mut self, y: u16) {
@@ -326,14 +328,16 @@ impl Document {
         }
         let current = self.rows.remove(y);
         self.rows[y - 1].push_str(&current);
+        self.dirty = true;
     }
 
-    fn save(&mut self) {
+    fn save(&mut self) -> Result<()> {
         if let Some(name) = &self.filename {
             let contents = self.rows.join("\n");
-            std::fs::write(name, contents);
+            std::fs::write(name, contents)?;
             self.dirty = false;
         }
+        Ok(())
     }
 }
 
