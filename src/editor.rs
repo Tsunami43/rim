@@ -64,6 +64,7 @@ impl CommandLine {
 pub struct Editor {
     should_quit: bool,
     awaiting_g: bool,
+    awaiting_d: bool,
     document: Document,
     mode: Mode,
     position_x: u16,
@@ -82,6 +83,7 @@ impl Editor {
         Self {
             should_quit: false,
             awaiting_g: false,
+            awaiting_d: false,
             document,
             mode: Mode::Normal,
             position_x: 0,
@@ -196,6 +198,9 @@ impl Editor {
         let was_awaiting_g = self.awaiting_g;
         self.awaiting_g = false;
 
+        let was_awaiting_d = self.awaiting_d;
+        self.awaiting_d = false;
+
         match key.code {
             KeyCode::Char(':') => {
                 self.mode = Mode::Command;
@@ -276,6 +281,24 @@ impl Editor {
             }
             // Switch state g
             KeyCode::Char('g') => self.awaiting_g = true,
+            // Delete under cursor
+            KeyCode::Char('x') if self.document.line_len(self.position_y) > 0 => {
+                self.document.delete_char(self.position_x, self.position_y); 
+                self.clamp_x_to_row();
+            }
+            // Delete truncate to cursor
+            KeyCode::Char('D') => {
+                self.document.truncate(self.position_x, self.position_y);
+                self.clamp_x_to_row();
+            }
+            // Delete current row
+            KeyCode::Char('d') if was_awaiting_d => {
+                self.document.remove_line(self.position_y);
+                self.clamp_y_to_doc();
+                self.clamp_x_to_row();
+            }
+            // Switch state d
+            KeyCode::Char('d') => self.awaiting_d = true,
             _ => {}
         }
     }
@@ -351,4 +374,12 @@ impl Editor {
             self.position_x = max_x;
         }
     }
+
+    fn clamp_y_to_doc(&mut self) {
+        let last = self.document.rows.len().saturating_sub(1) as u16;
+        if self.position_y > last {
+            self.position_y = last;
+        }
+    }
 }
+

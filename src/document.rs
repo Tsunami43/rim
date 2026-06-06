@@ -25,6 +25,19 @@ impl Document {
         }
     }
 
+    pub fn remove_line(&mut self, y: u16) {
+        if self.rows.get(y as usize).is_some() {
+            self.rows.remove(y as usize);
+        }
+        self.dirty = true;
+    }
+    pub fn truncate(&mut self, x: u16, y: u16) {
+        if let Some(row) = self.rows.get_mut(y as usize) {
+            row.truncate(x as usize);
+        }
+        self.dirty = true;
+    }
+
     pub fn insert_char(&mut self, x: u16, y: u16, ch: char) {
         if self.rows.is_empty() {
             self.rows.push(String::new());
