@@ -29,9 +29,10 @@ impl CommandLine {
         self.buffer.push(c);
     }
 
-    // pub fn as_str(&self) -> &str {
-    //     &self.buffer
-    // }
+    /// The typed text so far (for rendering the input line).
+    pub fn as_str(&self) -> &str {
+        &self.buffer
+    }
 
     /// Remove the last character (Backspace).
     pub fn pop(&mut self) {

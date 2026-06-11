@@ -1,4 +1,4 @@
-use super::Editor;
+use super::{Editor, Mode};
 use std::{
     self,
     io::{Result, Write, stdout},
@@ -46,28 +46,36 @@ impl Editor {
             }
         }
 
-        // Status line
+        // Bottom line: the `:` input while in Command mode, otherwise status
         queue!(out, Clear(ClearType::CurrentLine))?;
+        if self.mode == Mode::Command {
+            write!(out, ":{}", self.command_line.as_str())?;
+        } else {
+            let name = self.document.filename().unwrap_or("[No Name]");
+            let modified = if self.document.is_dirty() { " [+]" } else { "" };
+            let status = format!(
+                "{name}{modified} | {:?} | {}:{}",
+                self.mode,
+                self.position_y + 1,
+                self.position_x + 1,
+            );
+            write!(out, "{status}")?;
+        }
 
-        let name = self.document.filename().unwrap_or("[No Name]");
-        let modified = if self.document.is_dirty() { " [+]" } else { "" };
-        let status = format!(
-            "{name}{modified} | {:?} | {}:{}",
-            self.mode,
-            self.position_y + 1,
-            self.position_x + 1,
-        );
-        write!(out, "{status}")?;
-
-        // Return cursor
-        queue!(
-            out,
-            MoveTo(
-                self.position_x - self.offset_x,
-                self.position_y - self.offset_y
-            ),
-            Show
-        )?;
+        // Place the cursor: on the command line in Command mode, else in the text
+        if self.mode == Mode::Command {
+            let col = self.command_line.as_str().chars().count() as u16 + 1;
+            queue!(out, MoveTo(col, rows - 1), Show)?;
+        } else {
+            queue!(
+                out,
+                MoveTo(
+                    self.position_x - self.offset_x,
+                    self.position_y - self.offset_y
+                ),
+                Show
+            )?;
+        }
         out.flush()?; // Apply changes
         Ok(())
     }
