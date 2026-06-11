@@ -7,6 +7,7 @@ use std::{
 use crossterm::{
     cursor::{Hide, MoveTo, Show},
     queue,
+    style::{Attribute, SetAttribute},
     terminal::{Clear, ClearType, size},
 };
 
@@ -20,19 +21,29 @@ impl Editor {
 
         queue!(out, Hide, MoveTo(0, 0))?; // Hide cursor, move to start
 
-        // Document strings
+        // Document rows (highlighting the Visual selection cell by cell)
         for i in 0..rows - 1 {
             queue!(out, Clear(ClearType::CurrentLine))?;
             let doc_row = self.offset_y as usize + i as usize;
-            let content: String = match self.document.row(doc_row) {
-                Some(line) => line
-                    .chars()
-                    .skip(self.offset_x as usize)
-                    .take(cols as usize)
-                    .collect(),
-                None => "~".to_string(),
-            };
-            write!(out, "{content}\r\n")?;
+            match self.document.row(doc_row) {
+                Some(line) => {
+                    let visible = line
+                        .chars()
+                        .skip(self.offset_x as usize)
+                        .take(cols as usize);
+                    for (col, ch) in (self.offset_x as usize..).zip(visible) {
+                        if self.is_selected(col as u16, doc_row as u16) {
+                            queue!(out, SetAttribute(Attribute::Reverse))?;
+                            write!(out, "{ch}")?;
+                            queue!(out, SetAttribute(Attribute::Reset))?;
+                        } else {
+                            write!(out, "{ch}")?;
+                        }
+                    }
+                    write!(out, "\r\n")?;
+                }
+                None => write!(out, "~\r\n")?,
+            }
         }
 
         // Status line

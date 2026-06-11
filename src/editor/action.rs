@@ -30,6 +30,7 @@ pub enum Action {
     OpenLineBelow,   // o
     OpenLineAbove,   // O
     EnterCommand,    // :
+    EnterVisual,     // v
     // editing
     DeleteChar,              // x
     DeleteToLineEnd,         // D
@@ -40,6 +41,30 @@ pub enum Action {
     // system
     Save,
     Quit,
+}
+
+impl Action {
+    /// Whether this action only moves the cursor (used to allow motions
+    /// while in Visual mode without triggering edits or mode switches).
+    pub fn is_motion(&self) -> bool {
+        matches!(
+            self,
+            Action::MoveLeft
+                | Action::MoveRight
+                | Action::MoveUp
+                | Action::MoveDown
+                | Action::WordForward(_)
+                | Action::WordBackward(_)
+                | Action::WordEnd(_)
+                | Action::LineStart
+                | Action::LineEnd
+                | Action::FirstNonBlank
+                | Action::GotoTop
+                | Action::GotoBottom
+                | Action::HalfPageUp
+                | Action::HalfPageDown
+        )
+    }
 }
 
 impl Editor {
@@ -129,6 +154,10 @@ impl Editor {
                 self.mode = Mode::Insert;
             }
             Action::EnterCommand => self.mode = Mode::Command,
+            Action::EnterVisual => {
+                self.anchor = Some((self.position_x, self.position_y));
+                self.mode = Mode::Visual;
+            }
             Action::DeleteChar => {
                 // nothing to delete on an empty line
                 if self.document.line_len(self.position_y as usize) > 0 {

@@ -69,6 +69,7 @@ impl Keymap {
         bind(KeyCode::Char('o'), none, Action::OpenLineBelow);
         bind(KeyCode::Char('O'), none, Action::OpenLineAbove);
         bind(KeyCode::Char(':'), none, Action::EnterCommand);
+        bind(KeyCode::Char('v'), none, Action::EnterVisual);
 
         // editing
         bind(KeyCode::Char('x'), none, Action::DeleteChar);

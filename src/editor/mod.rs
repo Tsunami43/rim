@@ -17,6 +17,7 @@ enum Mode {
     Normal,
     Insert,
     Command,
+    Visual,
 }
 
 /// A pending operator waiting for a motion target (e.g. `d` in `dw`).
@@ -37,6 +38,8 @@ pub struct Editor {
     position_y: u16,
     offset_x: u16,
     offset_y: u16,
+    /// Visual-mode selection anchor (the fixed end of the selection).
+    anchor: Option<(u16, u16)>,
     command_line: CommandLine,
     keymap: Keymap,
 }
@@ -58,6 +61,7 @@ impl Editor {
             position_y: 0,
             offset_x: 0,
             offset_y: 0,
+            anchor: None,
             command_line: CommandLine::new(),
             keymap: Keymap::default_vim(),
         }
@@ -89,6 +93,29 @@ impl Editor {
             Mode::Normal => self.handler_normal(key),
             Mode::Insert => self.handler_insert(key),
             Mode::Command => self.handler_command(key),
+            Mode::Visual => self.handler_visual(key),
+        }
+    }
+
+    /// Ordered selection bounds `(start, end)` while in Visual mode, inclusive.
+    fn selection_bounds(&self) -> Option<((u16, u16), (u16, u16))> {
+        if self.mode != Mode::Visual {
+            return None;
+        }
+        let anchor = self.anchor?;
+        let cursor = (self.position_x, self.position_y);
+        if (anchor.1, anchor.0) <= (cursor.1, cursor.0) {
+            Some((anchor, cursor))
+        } else {
+            Some((cursor, anchor))
+        }
+    }
+
+    /// Whether cell `(x, y)` is inside the current Visual selection.
+    pub fn is_selected(&self, x: u16, y: u16) -> bool {
+        match self.selection_bounds() {
+            Some((start, end)) => (start.1, start.0) <= (y, x) && (y, x) <= (end.1, end.0),
+            None => false,
         }
     }
 

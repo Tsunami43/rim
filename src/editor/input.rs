@@ -168,6 +168,42 @@ impl Editor {
         }
     }
 
+    /// Handle a key in Visual mode: motions extend the selection,
+    /// `d`/`x` delete it, `Esc`/`v` leave Visual mode.
+    pub fn handler_visual(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Esc | KeyCode::Char('v') => {
+                self.anchor = None;
+                self.mode = Mode::Normal;
+            }
+            KeyCode::Char('d') | KeyCode::Char('x') => self.delete_selection(),
+            _ => {
+                let bind = KeyBind::from_event(key);
+                if let Some(action) = self.keymap.lookup_normal(&bind)
+                    && action.is_motion()
+                {
+                    self.execute_action(action);
+                }
+            }
+        }
+    }
+
+    /// Delete the current Visual selection (inclusive) and return to Normal.
+    fn delete_selection(&mut self) {
+        if let Some((start, end)) = self.selection_bounds() {
+            // the selection includes the end cell, so the exclusive end is end.x + 1
+            let (nx, ny) = self.document.delete_range(
+                (start.0 as usize, start.1 as usize),
+                (end.0 as usize + 1, end.1 as usize),
+            );
+            self.position_x = nx as u16;
+            self.position_y = ny as u16;
+            self.clamp_x_to_row();
+        }
+        self.anchor = None;
+        self.mode = Mode::Normal;
+    }
+
     /// Handle a key in Normal mode: operator-pending and `gg` first,
     /// then a single-key lookup in the keymap.
     pub fn handler_normal(&mut self, key: KeyEvent) {
