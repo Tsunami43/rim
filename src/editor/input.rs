@@ -114,9 +114,9 @@ impl Editor {
         }
     }
 
-    /// Apply an operator (`d` or `c`) to the motion given by `key`
-    /// (dd/cc, dw/cw, db, de and big variants).
-    pub fn apply_operator(&mut self, op: Operator, key: KeyEvent) {
+    /// Apply an operator (`d`/`c`/`y`) to the motion given by `key`, repeated
+    /// `n` times (dd/cc/yy linewise, dw/cw/db/de and big variants).
+    pub fn apply_operator(&mut self, op: Operator, key: KeyEvent, n: usize) {
         let x = self.position_x as usize;
         let y = self.position_y as usize;
 
@@ -125,7 +125,7 @@ impl Editor {
             self.push_undo();
         }
 
-        // doubled operator -> linewise (dd / cc / yy)
+        // doubled operator -> linewise over `n` lines (dd / cc / yy)
         let doubled = matches!(
             (op, key.code),
             (Operator::Delete, KeyCode::Char('d'))
@@ -133,15 +133,25 @@ impl Editor {
                 | (Operator::Yank, KeyCode::Char('y'))
         );
         if doubled {
-            self.register = Register::Line(self.document.row(y).unwrap_or("").to_string());
+            let last = (y + n).min(self.document.rows_len());
+            let text = (y..last)
+                .map(|i| self.document.row(i).unwrap_or(""))
+                .collect::<Vec<_>>()
+                .join("\n");
+            self.register = Register::Line(text);
             match op {
                 Operator::Delete => {
-                    self.document.remove_line(y);
+                    for _ in y..last {
+                        self.document.remove_line(y);
+                    }
                     self.clamp_y_to_doc();
                     self.clamp_x_to_row();
                 }
                 Operator::Change => {
-                    // clear the line but keep it, then insert at column 0
+                    // remove the extra lines, clear the current one, then insert
+                    for _ in (y + 1)..last {
+                        self.document.remove_line(y + 1);
+                    }
                     self.document.truncate(0, y);
                     self.position_x = 0;
                     self.mode = Mode::Insert;
@@ -151,39 +161,60 @@ impl Editor {
             return;
         }
 
-        // resolve the target position of the motion
-        let target = match key.code {
-            KeyCode::Char('w') => Some(self.clamp_target_to_line(self.document.next_word(x, y, false))),
-            KeyCode::Char('W') => Some(self.clamp_target_to_line(self.document.next_word(x, y, true))),
-            KeyCode::Char('b') => Some(self.document.previous_word(x, y, false)),
-            KeyCode::Char('B') => Some(self.document.previous_word(x, y, true)),
-            KeyCode::Char('e') => {
-                let (ex, ey) = self.document.next_word_end(x, y, false);
-                Some((ex + 1, ey)) // `e` is inclusive
-            }
-            KeyCode::Char('E') => {
-                let (ex, ey) = self.document.next_word_end(x, y, true);
-                Some((ex + 1, ey))
-            }
-            _ => None,
-        };
-
-        if let Some(target) = target {
-            self.register = Register::Char(self.document.text_in_range((x, y), target));
-            if op == Operator::Yank {
-                // move the cursor to the start of the yanked range
-                let start = if (target.1, target.0) < (y, x) { target } else { (x, y) };
-                self.position_x = start.0 as u16;
-                self.position_y = start.1 as u16;
-                self.clamp_x_to_row();
-            } else {
-                let (nx, ny) = self.document.delete_range((x, y), target);
-                self.position_x = nx as u16;
-                self.position_y = ny as u16;
-                self.clamp_x_to_row();
-                if op == Operator::Change {
-                    self.mode = Mode::Insert;
+        // resolve the target by applying the motion `n` times
+        let mut tx = x;
+        let mut ty = y;
+        let mut inclusive = false;
+        let mut word_forward = false;
+        for _ in 0..n {
+            let (mx, my) = match key.code {
+                KeyCode::Char('w') => {
+                    word_forward = true;
+                    self.document.next_word(tx, ty, false)
                 }
+                KeyCode::Char('W') => {
+                    word_forward = true;
+                    self.document.next_word(tx, ty, true)
+                }
+                KeyCode::Char('b') => self.document.previous_word(tx, ty, false),
+                KeyCode::Char('B') => self.document.previous_word(tx, ty, true),
+                KeyCode::Char('e') => {
+                    inclusive = true;
+                    self.document.next_word_end(tx, ty, false)
+                }
+                KeyCode::Char('E') => {
+                    inclusive = true;
+                    self.document.next_word_end(tx, ty, true)
+                }
+                _ => return, // not a motion -> cancel the operator
+            };
+            tx = mx;
+            ty = my;
+        }
+
+        let mut target = (tx, ty);
+        if inclusive {
+            target = (target.0 + 1, target.1);
+        }
+        // single `dw`/`cw` must not join lines; for counts allow crossing
+        if word_forward && n == 1 {
+            target = self.clamp_target_to_line(target);
+        }
+
+        self.register = Register::Char(self.document.text_in_range((x, y), target));
+        if op == Operator::Yank {
+            // move the cursor to the start of the yanked range
+            let start = if (target.1, target.0) < (y, x) { target } else { (x, y) };
+            self.position_x = start.0 as u16;
+            self.position_y = start.1 as u16;
+            self.clamp_x_to_row();
+        } else {
+            let (nx, ny) = self.document.delete_range((x, y), target);
+            self.position_x = nx as u16;
+            self.position_y = ny as u16;
+            self.clamp_x_to_row();
+            if op == Operator::Change {
+                self.mode = Mode::Insert;
             }
         }
     }
@@ -260,9 +291,10 @@ impl Editor {
             return;
         }
 
-        // 1) waiting for an operator target (dw, dd, cw, cc, ...)
+        // 1) waiting for an operator target (dw, dd, cw, cc, 2dw, ...)
         if let Some(op) = self.pending_op.take() {
-            self.apply_operator(op, key);
+            let n = self.count.take().unwrap_or(1);
+            self.apply_operator(op, key, n);
             return;
         }
 
@@ -271,17 +303,38 @@ impl Editor {
             if key.code == KeyCode::Char('g') {
                 self.execute_action(Action::GotoTop);
             }
+            self.count = None;
             return;
         }
+
+        // 3) accumulate a numeric count prefix (`0` alone is a motion, not a count)
+        if let KeyCode::Char(c) = key.code
+            && c.is_ascii_digit()
+            && !(c == '0' && self.count.is_none())
+        {
+            let digit = c.to_digit(10).unwrap_or(0) as usize;
+            self.count = Some(self.count.unwrap_or(0) * 10 + digit);
+            return;
+        }
+
         if key.code == KeyCode::Char('g') && !key.modifiers.contains(KeyModifiers::CONTROL) {
             self.awaiting_g = true;
             return;
         }
 
-        // 3) single key via the keymap
+        // 4) single key via the keymap, repeated `count` times
+        let n = self.count.take().unwrap_or(1);
         let bind = KeyBind::from_event(key);
         if let Some(action) = self.keymap.lookup_normal(&bind) {
-            self.execute_action(action);
+            // an operator carries the count forward to its motion (e.g. 3dw)
+            if let Action::StartOperator(op) = action {
+                self.pending_op = Some(op);
+                self.count = Some(n);
+            } else {
+                for _ in 0..n {
+                    self.execute_action(action);
+                }
+            }
         }
     }
 }

@@ -44,6 +44,8 @@ pub struct Editor {
     should_quit: bool,
     awaiting_g: bool,
     awaiting_replace: bool,
+    /// Numeric prefix being accumulated in Normal mode (e.g. `3` in `3j`).
+    count: Option<usize>,
     pending_op: Option<Operator>,
     document: Document,
     mode: Mode,
@@ -81,6 +83,7 @@ impl Editor {
             should_quit: false,
             awaiting_g: false,
             awaiting_replace: false,
+            count: None,
             pending_op: None,
             document,
             mode: Mode::Normal,
