@@ -76,3 +76,20 @@ impl Document {
         self.rows.get(y).and_then(|row| row.chars().nth(x))
     }
 }
+
+#[cfg(test)]
+impl Document {
+    /// Build a document directly from lines (tests only).
+    pub(crate) fn from_lines(lines: &[&str]) -> Self {
+        Self {
+            rows: lines.iter().map(|s| s.to_string()).collect(),
+            filename: None,
+            dirty: false,
+        }
+    }
+
+    /// The lines as `&str` (tests only).
+    pub(crate) fn lines(&self) -> Vec<&str> {
+        self.rows.iter().map(|s| s.as_str()).collect()
+    }
+}

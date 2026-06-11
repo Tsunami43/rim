@@ -119,3 +119,84 @@ impl Document {
         self.dirty = true;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::document::Document;
+
+    #[test]
+    fn insert_and_delete_char() {
+        let mut d = Document::from_lines(&["ac"]);
+        d.insert_char(1, 0, 'b');
+        assert_eq!(d.lines(), vec!["abc"]);
+        d.delete_char(1, 0);
+        assert_eq!(d.lines(), vec!["ac"]);
+    }
+
+    #[test]
+    fn insert_newline_splits_line() {
+        let mut d = Document::from_lines(&["foobar"]);
+        d.insert_newline(3, 0);
+        assert_eq!(d.lines(), vec!["foo", "bar"]);
+    }
+
+    #[test]
+    fn join_line_merges_into_previous() {
+        let mut d = Document::from_lines(&["foo", "bar"]);
+        d.join_line(1);
+        assert_eq!(d.lines(), vec!["foobar"]);
+    }
+
+    #[test]
+    fn truncate_cuts_to_end() {
+        let mut d = Document::from_lines(&["hello world"]);
+        d.truncate(5, 0);
+        assert_eq!(d.lines(), vec!["hello"]);
+    }
+
+    #[test]
+    fn delete_range_single_line() {
+        let mut d = Document::from_lines(&["foo bar baz"]);
+        let pos = d.delete_range((0, 0), (4, 0)); // delete "foo "
+        assert_eq!(d.lines(), vec!["bar baz"]);
+        assert_eq!(pos, (0, 0));
+    }
+
+    #[test]
+    fn delete_range_multi_line_joins() {
+        let mut d = Document::from_lines(&["hello", "world"]);
+        // from middle of line 0 to middle of line 1 -> the two lines merge
+        d.delete_range((2, 0), (2, 1));
+        assert_eq!(d.lines(), vec!["herld"]);
+    }
+
+    #[test]
+    fn delete_range_normalizes_reversed_input() {
+        let mut d = Document::from_lines(&["foo bar baz"]);
+        // passing the larger position first still deletes [4, 8)
+        let pos = d.delete_range((8, 0), (4, 0));
+        assert_eq!(d.lines(), vec!["foo baz"]);
+        assert_eq!(pos, (4, 0));
+    }
+
+    #[test]
+    fn replace_char_in_place() {
+        let mut d = Document::from_lines(&["cat"]);
+        d.replace_char(0, 0, 'b');
+        assert_eq!(d.lines(), vec!["bat"]);
+    }
+
+    #[test]
+    fn join_below_adds_space() {
+        let mut d = Document::from_lines(&["foo", "   bar"]);
+        d.join_below(0);
+        assert_eq!(d.lines(), vec!["foo bar"]);
+    }
+
+    #[test]
+    fn insert_row_inserts_line() {
+        let mut d = Document::from_lines(&["a", "b"]);
+        d.insert_row(1, "x".to_string());
+        assert_eq!(d.lines(), vec!["a", "x", "b"]);
+    }
+}

@@ -116,3 +116,52 @@ impl Document {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::document::Document;
+
+    #[test]
+    fn next_word_within_line() {
+        let d = Document::from_lines(&["foo bar baz"]);
+        assert_eq!(d.next_word(0, 0, false), (4, 0)); // foo -> bar
+        assert_eq!(d.next_word(4, 0, false), (8, 0)); // bar -> baz
+    }
+
+    #[test]
+    fn next_word_punctuation() {
+        let d = Document::from_lines(&["foo.bar"]);
+        // small `w`: punctuation is its own word
+        assert_eq!(d.next_word(0, 0, false), (3, 0)); // foo -> .
+        assert_eq!(d.next_word(3, 0, false), (4, 0)); // . -> bar
+        // big `W`: whole thing is one word -> jump to end of line
+        assert_eq!(d.next_word(0, 0, true), (6, 0));
+    }
+
+    #[test]
+    fn next_word_crosses_to_next_line() {
+        let d = Document::from_lines(&["foo", "bar"]);
+        assert_eq!(d.next_word(0, 0, false), (0, 1)); // end of line 0 -> start of line 1
+    }
+
+    #[test]
+    fn previous_word_within_line() {
+        let d = Document::from_lines(&["foo bar baz"]);
+        assert_eq!(d.previous_word(8, 0, false), (4, 0)); // baz -> bar
+        assert_eq!(d.previous_word(4, 0, false), (0, 0)); // bar -> foo
+    }
+
+    #[test]
+    fn previous_word_crosses_to_previous_line() {
+        let d = Document::from_lines(&["hello world", "foo"]);
+        // from start of line 1 back to start of "world" (last word of line 0)
+        assert_eq!(d.previous_word(0, 1, false), (6, 0));
+    }
+
+    #[test]
+    fn word_end() {
+        let d = Document::from_lines(&["foo bar"]);
+        assert_eq!(d.next_word_end(0, 0, false), (2, 0)); // -> end of foo
+        assert_eq!(d.next_word_end(2, 0, false), (6, 0)); // -> end of bar
+    }
+}
