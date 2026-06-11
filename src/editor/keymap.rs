@@ -54,6 +54,9 @@ impl Keymap {
         bind(KeyCode::Char('B'), none, Action::WordBackward(true));
         bind(KeyCode::Char('e'), none, Action::WordEnd(false));
         bind(KeyCode::Char('E'), none, Action::WordEnd(true));
+        bind(KeyCode::Char('0'), none, Action::LineStart);
+        bind(KeyCode::Char('$'), none, Action::LineEnd);
+        bind(KeyCode::Char('^'), none, Action::FirstNonBlank);
         bind(KeyCode::Char('G'), none, Action::GotoBottom);
         bind(KeyCode::Char('u'), ctrl, Action::HalfPageUp);
         bind(KeyCode::Char('d'), ctrl, Action::HalfPageDown);
@@ -63,11 +66,16 @@ impl Keymap {
         bind(KeyCode::Char('a'), none, Action::InsertAfter);
         bind(KeyCode::Char('I'), none, Action::InsertLineStart);
         bind(KeyCode::Char('A'), none, Action::InsertLineEnd);
+        bind(KeyCode::Char('o'), none, Action::OpenLineBelow);
+        bind(KeyCode::Char('O'), none, Action::OpenLineAbove);
         bind(KeyCode::Char(':'), none, Action::EnterCommand);
 
         // editing
         bind(KeyCode::Char('x'), none, Action::DeleteChar);
         bind(KeyCode::Char('D'), none, Action::DeleteToLineEnd);
+        bind(KeyCode::Char('J'), none, Action::JoinLines);
+        bind(KeyCode::Char('~'), none, Action::ToggleCase);
+        bind(KeyCode::Char('r'), none, Action::ReplaceChar);
         bind(KeyCode::Char('d'), none, Action::StartOperator(Operator::Delete));
 
         // system

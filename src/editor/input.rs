@@ -174,6 +174,16 @@ impl Editor {
         let was_awaiting_g = self.awaiting_g;
         self.awaiting_g = false;
 
+        // r: the next key replaces the char under the cursor
+        if self.awaiting_replace {
+            self.awaiting_replace = false;
+            if let KeyCode::Char(c) = key.code {
+                self.document
+                    .replace_char(self.position_x as usize, self.position_y as usize, c);
+            }
+            return;
+        }
+
         // 1) waiting for an operator target (dw, dd, ...)
         if let Some(op) = self.pending_op.take() {
             match op {

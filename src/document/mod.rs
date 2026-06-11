@@ -70,4 +70,9 @@ impl Document {
     pub fn line_len(&self, i: usize) -> usize {
         self.rows.get(i).map_or(0, |row| row.len())
     }
+
+    /// The character at `(x, y)`, if it exists.
+    pub fn char_at(&self, x: usize, y: usize) -> Option<char> {
+        self.rows.get(y).and_then(|row| row.chars().nth(x))
+    }
 }

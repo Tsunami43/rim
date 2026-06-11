@@ -29,6 +29,7 @@ pub enum Operator {
 pub struct Editor {
     should_quit: bool,
     awaiting_g: bool,
+    awaiting_replace: bool,
     pending_op: Option<Operator>,
     document: Document,
     mode: Mode,
@@ -49,6 +50,7 @@ impl Editor {
         Self {
             should_quit: false,
             awaiting_g: false,
+            awaiting_replace: false,
             pending_op: None,
             document,
             mode: Mode::Normal,

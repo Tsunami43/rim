@@ -85,4 +85,37 @@ impl Document {
         self.dirty = true;
         (start.0, start.1)
     }
+
+    /// Insert `text` as a new line at index `y` (clamped to the end).
+    pub fn insert_row(&mut self, y: usize, text: String) {
+        let y = y.min(self.rows.len());
+        self.rows.insert(y, text);
+        self.dirty = true;
+    }
+
+    /// Replace the character at `(x, y)` with `ch` (no-op if out of range).
+    pub fn replace_char(&mut self, x: usize, y: usize, ch: char) {
+        if let Some(row) = self.rows.get_mut(y) {
+            let mut chars: Vec<char> = row.chars().collect();
+            if x < chars.len() {
+                chars[x] = ch;
+                *row = chars.into_iter().collect();
+                self.dirty = true;
+            }
+        }
+    }
+
+    /// Join line `y + 1` onto line `y`, separated by a single space (vim's J).
+    pub fn join_below(&mut self, y: usize) {
+        if y + 1 >= self.rows.len() {
+            return;
+        }
+        let next = self.rows.remove(y + 1);
+        let trimmed = next.trim_start();
+        if !self.rows[y].is_empty() && !trimmed.is_empty() {
+            self.rows[y].push(' ');
+        }
+        self.rows[y].push_str(trimmed);
+        self.dirty = true;
+    }
 }

@@ -15,6 +15,9 @@ pub enum Action {
     WordForward(bool),  // bool = big (W instead of w)
     WordBackward(bool), // B instead of b
     WordEnd(bool),      // E instead of e
+    LineStart,          // 0
+    LineEnd,            // $
+    FirstNonBlank,      // ^
     GotoTop,            // gg
     GotoBottom,         // G
     HalfPageUp,         // ctrl+u
@@ -24,10 +27,15 @@ pub enum Action {
     InsertAfter,     // a
     InsertLineStart, // I
     InsertLineEnd,   // A
+    OpenLineBelow,   // o
+    OpenLineAbove,   // O
     EnterCommand,    // :
     // editing
     DeleteChar,              // x
     DeleteToLineEnd,         // D
+    JoinLines,               // J
+    ToggleCase,              // ~
+    ReplaceChar,             // r (waits for the replacement char)
     StartOperator(Operator), // d (starts operator-pending)
     // system
     Save,
@@ -134,6 +142,49 @@ impl Editor {
                     .truncate(self.position_x as usize, self.position_y as usize);
                 self.clamp_x_to_row();
             }
+            Action::LineStart => self.position_x = 0,
+            Action::LineEnd => self.position_x = self.current_row_len().saturating_sub(1),
+            Action::FirstNonBlank => {
+                if let Some(line) = self.document.row(self.position_y as usize) {
+                    let x = line.chars().position(|c| !c.is_whitespace()).unwrap_or(0);
+                    self.position_x = x as u16;
+                }
+            }
+            Action::OpenLineBelow => {
+                let at = (self.position_y as usize + 1).min(self.document.rows_len());
+                self.document.insert_row(at, String::new());
+                self.position_y = at as u16;
+                self.position_x = 0;
+                self.mode = Mode::Insert;
+            }
+            Action::OpenLineAbove => {
+                self.document
+                    .insert_row(self.position_y as usize, String::new());
+                self.position_x = 0;
+                self.mode = Mode::Insert;
+            }
+            Action::JoinLines => {
+                self.document.join_below(self.position_y as usize);
+                self.clamp_x_to_row();
+            }
+            Action::ToggleCase => {
+                let x = self.position_x as usize;
+                let y = self.position_y as usize;
+                if let Some(c) = self.document.char_at(x, y) {
+                    let toggled = if c.is_uppercase() {
+                        c.to_lowercase().next().unwrap_or(c)
+                    } else {
+                        c.to_uppercase().next().unwrap_or(c)
+                    };
+                    self.document.replace_char(x, y, toggled);
+                    // move right within the line (vim behaviour)
+                    if self.current_row_len() > self.position_x.saturating_add(1) {
+                        self.position_x += 1;
+                    }
+                }
+            }
+            // wait for the next key, which replaces the char under the cursor
+            Action::ReplaceChar => self.awaiting_replace = true,
             // arm the operator; its target key is handled on the next press
             Action::StartOperator(op) => self.pending_op = Some(op),
             Action::Save => {
