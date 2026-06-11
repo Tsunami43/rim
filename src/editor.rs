@@ -20,11 +20,16 @@ enum Mode {
 }
 
 #[derive(Clone, Debug, Copy, PartialEq)]
-pub enum Command {
+enum Command {
     Save,
     Quit,
     SaveQuit,
     Unknown,
+}
+
+#[derive(Clone, Debug, Copy, PartialEq)]
+enum Operator {
+    Delete,
 }
 
 pub struct CommandLine {
@@ -50,7 +55,7 @@ impl CommandLine {
         self.buffer.clear();
     }
 
-    pub fn parse(&self) -> Command {
+    fn parse(&self) -> Command {
         match self.buffer.as_str() {
             "w" => Command::Save,
             "q" => Command::Quit,
@@ -64,7 +69,7 @@ impl CommandLine {
 pub struct Editor {
     should_quit: bool,
     awaiting_g: bool,
-    awaiting_d: bool,
+    pending_op: Option<Operator>,
     document: Document,
     mode: Mode,
     position_x: u16,
@@ -83,7 +88,7 @@ impl Editor {
         Self {
             should_quit: false,
             awaiting_g: false,
-            awaiting_d: false,
+            pending_op: None,
             document,
             mode: Mode::Normal,
             position_x: 0,
@@ -193,12 +198,72 @@ impl Editor {
         }
     }
 
+    pub fn handler_pending_d(&mut self, key: KeyEvent) {
+        match key.code {
+            // Delete current row
+            KeyCode::Char('d') => {
+                self.document.remove_line(self.position_y);
+                self.clamp_y_to_doc();
+                self.clamp_x_to_row();
+            }
+            // KeyCode::Char('b') => {
+            //     let (x, y) = self
+            //         .document
+            //         .previous_word(self.position_x, self.position_y, false);
+            //     self.position_x = x;
+            //     self.position_y = y;
+            // }
+            // KeyCode::Char('B') => {
+            //     let (x, y) = self
+            //         .document
+            //         .previous_word(self.position_x, self.position_y, true);
+            //     self.position_x = x;
+            //     self.position_y = y;
+            // }
+            // KeyCode::Char('w') => {
+            //     let (x, y) = self
+            //         .document
+            //         .next_word(self.position_x, self.position_y, false);
+            //     self.position_x = x;
+            //     self.position_y = y;
+            // }
+            // KeyCode::Char('W') => {
+            //     let (x, y) = self
+            //         .document
+            //         .next_word(self.position_x, self.position_y, true);
+            //     self.position_x = x;
+            //     self.position_y = y;
+            // }
+            // KeyCode::Char('e') => {
+            //     let (x, y) = self
+            //         .document
+            //         .next_word_end(self.position_x, self.position_y, false);
+            //     self.position_x = x;
+            //     self.position_y = y;
+            // }
+            // KeyCode::Char('E') => {
+            //     let (x, y) = self
+            //         .document
+            //         .next_word_end(self.position_x, self.position_y, true);
+            //     self.position_x = x;
+            //     self.position_y = y;
+            // }
+            _ => {}
+        }
+    }
+
     pub fn handler_normal(&mut self, key: KeyEvent) {
         let was_awaiting_g = self.awaiting_g;
         self.awaiting_g = false;
 
-        let was_awaiting_d = self.awaiting_d;
-        self.awaiting_d = false;
+        let pending = self.pending_op.take();
+        if !pending.is_none() {
+            match pending {
+                Some(Operator::Delete) => self.handler_pending_d(key),
+                _ => {}
+            }
+            return;
+        }
 
         match key.code {
             KeyCode::Char(':') => {
@@ -290,14 +355,6 @@ impl Editor {
                 self.document.truncate(self.position_x, self.position_y);
                 self.clamp_x_to_row();
             }
-            // Delete current row
-            KeyCode::Char('d') if was_awaiting_d => {
-                self.document.remove_line(self.position_y);
-                self.clamp_y_to_doc();
-                self.clamp_x_to_row();
-            }
-            // Switch state d
-            KeyCode::Char('d') => self.awaiting_d = true,
 
             // Previous word (foo.bar)
             KeyCode::Char('b') => {
@@ -347,6 +404,8 @@ impl Editor {
                 self.position_x = x;
                 self.position_y = y;
             }
+            // Switch state d
+            KeyCode::Char('d') => self.pending_op = Some(Operator::Delete),
             _ => {}
         }
     }
