@@ -301,37 +301,49 @@ impl Editor {
 
             // Previous word (foo.bar)
             KeyCode::Char('b') => {
-                let (x, y) = self.previous_word(false);
+                let (x, y) = self
+                    .document
+                    .previous_word(self.position_x, self.position_y, false);
                 self.position_x = x;
                 self.position_y = y;
             }
             // Previous word (foo bar)
             KeyCode::Char('B') => {
-                let (x, y) = self.previous_word(true);
+                let (x, y) = self
+                    .document
+                    .previous_word(self.position_x, self.position_y, true);
                 self.position_x = x;
                 self.position_y = y;
             }
             // Next word (foo.bar)
             KeyCode::Char('w') => {
-                let (x, y) = self.next_word(false);
+                let (x, y) = self
+                    .document
+                    .next_word(self.position_x, self.position_y, false);
                 self.position_x = x;
                 self.position_y = y;
             }
             // Next word (foo bar)
             KeyCode::Char('W') => {
-                let (x, y) = self.next_word(true);
+                let (x, y) = self
+                    .document
+                    .next_word(self.position_x, self.position_y, true);
                 self.position_x = x;
                 self.position_y = y;
             }
             // Next word end (foo.bar)
             KeyCode::Char('e') => {
-                let (x, y) = self.next_word_end(false);
+                let (x, y) = self
+                    .document
+                    .next_word_end(self.position_x, self.position_y, false);
                 self.position_x = x;
                 self.position_y = y;
             }
             // Next word end (foo bar)
             KeyCode::Char('E') => {
-                let (x, y) = self.next_word_end(true);
+                let (x, y) = self
+                    .document
+                    .next_word_end(self.position_x, self.position_y, true);
                 self.position_x = x;
                 self.position_y = y;
             }
@@ -416,117 +428,5 @@ impl Editor {
         if self.position_y > last {
             self.position_y = last;
         }
-    }
-
-    fn next_word_end(&self, big: bool) -> (u16, u16) {
-        let mut y = self.position_y;
-        let mut i = self.position_x as usize + 1;
-
-        loop {
-            let chars: Vec<char> = match self.document.rows.get(y as usize) {
-                Some(l) => l.chars().collect(),
-                None => return (self.position_x, self.position_y),
-            };
-            let n = chars.len();
-
-            if i >= n {
-                let last = self.document.rows.len().saturating_sub(1) as u16;
-                if y >= last {
-                    return (n.saturating_sub(1) as u16, y);
-                }
-                y += 1;
-                i = 0;
-                continue;
-            }
-
-            while i < n && self.class_of(chars[i], big) == 0 {
-                i += 1;
-            }
-            if i >= n {
-                continue;
-            }
-            let cls = self.class_of(chars[i], big);
-            while i + 1 < n && self.class_of(chars[i + 1], big) == cls {
-                i += 1;
-            }
-            return (i as u16, y);
-        }
-    }
-
-    fn previous_word(&self, big: bool) -> (u16, u16) {
-        let mut y = self.position_y;
-        let mut i = self.position_x as usize;
-
-        loop {
-            if i == 0 {
-                if y == 0 {
-                    return (0, 0);
-                }
-                y -= 1;
-                i = self.document.line_len(y) as usize;
-                continue;
-            }
-
-            let chars: Vec<char> = match self.document.rows.get(y as usize) {
-                Some(l) => l.chars().collect(),
-                None => return (self.position_x, self.position_y),
-            };
-
-            i -= 1;
-            while i > 0 && self.class_of(chars[i], big) == 0 {
-                i -= 1;
-            }
-            if self.class_of(chars[i], big) == 0 {
-                continue;
-            }
-            let cls = self.class_of(chars[i], big);
-            while i > 0 && self.class_of(chars[i - 1], big) == cls {
-                i -= 1;
-            }
-            return (i as u16, y);
-        }
-    }
-
-    fn class_of(&self, c: char, big: bool) -> u8 {
-        if c.is_whitespace() {
-            0
-        } else if big {
-            1 // B/W/E
-        } else if c.is_alphanumeric() || c == '_' {
-            1 // b/w/e: abcd/1234/_ ...
-        } else {
-            2 // b/w/e: ./,/; ...
-        }
-    }
-
-    fn next_word(&self, big: bool) -> (u16, u16) {
-        let line = match self.document.rows.get(self.position_y as usize) {
-            Some(l) => l,
-            None => return (self.position_x, self.position_y),
-        };
-        let chars: Vec<char> = line.chars().collect();
-        let n = chars.len();
-        let mut i = self.position_x as usize;
-
-        if i < n {
-            let cls = self.class_of(chars[i], big);
-            if cls != 0 {
-                while i < n && self.class_of(chars[i], big) == cls {
-                    i += 1;
-                }
-            }
-            while i < n && self.class_of(chars[i], big) == 0 {
-                i += 1;
-            }
-        }
-
-        if i >= n {
-            let last = self.document.rows.len().saturating_sub(1) as u16;
-            if self.position_y < last {
-                return (0, self.position_y + 1);
-            }
-            return (n.saturating_sub(1) as u16, self.position_y);
-        }
-        (i as u16, self.position_y)
     }
 }
