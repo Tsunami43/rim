@@ -1,4 +1,4 @@
-use super::{Editor, Mode, Operator};
+use super::{Editor, Mode, Operator, Register};
 
 use crossterm::terminal::size;
 
@@ -37,7 +37,9 @@ pub enum Action {
     JoinLines,               // J
     ToggleCase,              // ~
     ReplaceChar,             // r (waits for the replacement char)
-    StartOperator(Operator), // d (starts operator-pending)
+    Paste,                   // p (after the cursor)
+    PasteBefore,             // P (before the cursor)
+    StartOperator(Operator), // d/c/y (starts operator-pending)
     // system
     Save,
     Quit,
@@ -159,10 +161,14 @@ impl Editor {
                 self.mode = Mode::Visual;
             }
             Action::DeleteChar => {
+                let x = self.position_x as usize;
+                let y = self.position_y as usize;
                 // nothing to delete on an empty line
-                if self.document.line_len(self.position_y as usize) > 0 {
-                    self.document
-                        .delete_char(self.position_x as usize, self.position_y as usize);
+                if self.document.line_len(y) > 0 {
+                    if let Some(c) = self.document.char_at(x, y) {
+                        self.register = Register::Char(c.to_string());
+                    }
+                    self.document.delete_char(x, y);
                     self.clamp_x_to_row();
                 }
             }
@@ -214,12 +220,44 @@ impl Editor {
             }
             // wait for the next key, which replaces the char under the cursor
             Action::ReplaceChar => self.awaiting_replace = true,
+            Action::Paste => self.paste(false),
+            Action::PasteBefore => self.paste(true),
             // arm the operator; its target key is handled on the next press
             Action::StartOperator(op) => self.pending_op = Some(op),
             Action::Save => {
                 let _ = self.document.save();
             }
             Action::Quit => self.should_quit = true,
+        }
+    }
+
+    /// Paste the register at the cursor (`p` after, `P` before).
+    fn paste(&mut self, before: bool) {
+        match self.register.clone() {
+            Register::None => {}
+            Register::Line(text) => {
+                let y = self.position_y as usize;
+                let at = if before { y } else { y + 1 };
+                self.document.insert_row(at, text);
+                self.position_y = at as u16;
+                self.position_x = 0;
+                self.clamp_y_to_doc();
+            }
+            Register::Char(text) => {
+                let x = self.position_x as usize;
+                let y = self.position_y as usize;
+                let at = if before {
+                    x
+                } else {
+                    (x + 1).min(self.document.line_len(y))
+                };
+                self.document.insert_str(at, y, &text);
+                // leave the cursor on the last pasted char (single-line case)
+                if !text.contains('\n') {
+                    self.position_x = (at + text.chars().count()).saturating_sub(1) as u16;
+                }
+                self.clamp_x_to_row();
+            }
         }
     }
 }

@@ -25,6 +25,17 @@ enum Mode {
 pub enum Operator {
     Delete,
     Change,
+    Yank,
+}
+
+/// The yank/delete register (a tiny clipboard).
+#[derive(Clone, Debug, PartialEq)]
+pub enum Register {
+    None,
+    /// Characterwise text (e.g. from `yw`, `x`).
+    Char(String),
+    /// Linewise text (e.g. from `yy`, `dd`).
+    Line(String),
 }
 
 /// The editor: owns the document, cursor/viewport state, mode and keymap.
@@ -41,6 +52,8 @@ pub struct Editor {
     offset_y: u16,
     /// Visual-mode selection anchor (the fixed end of the selection).
     anchor: Option<(u16, u16)>,
+    /// Yank/delete register.
+    register: Register,
     command_line: CommandLine,
     keymap: Keymap,
 }
@@ -63,6 +76,7 @@ impl Editor {
             offset_x: 0,
             offset_y: 0,
             anchor: None,
+            register: Register::None,
             command_line: CommandLine::new(),
             keymap: Keymap::default_vim(),
         }

@@ -1,4 +1,4 @@
-use super::{Editor, Mode, Operator, action::Action, command_line::Command, keymap::KeyBind};
+use super::{Editor, Mode, Operator, Register, action::Action, command_line::Command, keymap::KeyBind};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
@@ -95,12 +95,15 @@ impl Editor {
         let x = self.position_x as usize;
         let y = self.position_y as usize;
 
-        // doubled operator -> linewise (dd / cc)
+        // doubled operator -> linewise (dd / cc / yy)
         let doubled = matches!(
             (op, key.code),
-            (Operator::Delete, KeyCode::Char('d')) | (Operator::Change, KeyCode::Char('c'))
+            (Operator::Delete, KeyCode::Char('d'))
+                | (Operator::Change, KeyCode::Char('c'))
+                | (Operator::Yank, KeyCode::Char('y'))
         );
         if doubled {
+            self.register = Register::Line(self.document.row(y).unwrap_or("").to_string());
             match op {
                 Operator::Delete => {
                     self.document.remove_line(y);
@@ -113,6 +116,7 @@ impl Editor {
                     self.position_x = 0;
                     self.mode = Mode::Insert;
                 }
+                Operator::Yank => {}
             }
             return;
         }
@@ -135,12 +139,21 @@ impl Editor {
         };
 
         if let Some(target) = target {
-            let (nx, ny) = self.document.delete_range((x, y), target);
-            self.position_x = nx as u16;
-            self.position_y = ny as u16;
-            self.clamp_x_to_row();
-            if op == Operator::Change {
-                self.mode = Mode::Insert;
+            self.register = Register::Char(self.document.text_in_range((x, y), target));
+            if op == Operator::Yank {
+                // move the cursor to the start of the yanked range
+                let start = if (target.1, target.0) < (y, x) { target } else { (x, y) };
+                self.position_x = start.0 as u16;
+                self.position_y = start.1 as u16;
+                self.clamp_x_to_row();
+            } else {
+                let (nx, ny) = self.document.delete_range((x, y), target);
+                self.position_x = nx as u16;
+                self.position_y = ny as u16;
+                self.clamp_x_to_row();
+                if op == Operator::Change {
+                    self.mode = Mode::Insert;
+                }
             }
         }
     }
@@ -154,6 +167,7 @@ impl Editor {
                 self.mode = Mode::Normal;
             }
             KeyCode::Char('d') | KeyCode::Char('x') => self.delete_selection(),
+            KeyCode::Char('y') => self.yank_selection(),
             _ => {
                 let bind = KeyBind::from_event(key);
                 if let Some(action) = self.keymap.lookup_normal(&bind)
@@ -165,16 +179,34 @@ impl Editor {
         }
     }
 
+    /// Inclusive selection range as exclusive document coordinates.
+    fn selection_range(&self) -> Option<((usize, usize), (usize, usize))> {
+        let (start, end) = self.selection_bounds()?;
+        Some((
+            (start.0 as usize, start.1 as usize),
+            (end.0 as usize + 1, end.1 as usize),
+        ))
+    }
+
     /// Delete the current Visual selection (inclusive) and return to Normal.
     fn delete_selection(&mut self) {
-        if let Some((start, end)) = self.selection_bounds() {
-            // the selection includes the end cell, so the exclusive end is end.x + 1
-            let (nx, ny) = self.document.delete_range(
-                (start.0 as usize, start.1 as usize),
-                (end.0 as usize + 1, end.1 as usize),
-            );
+        if let Some((from, to)) = self.selection_range() {
+            self.register = Register::Char(self.document.text_in_range(from, to));
+            let (nx, ny) = self.document.delete_range(from, to);
             self.position_x = nx as u16;
             self.position_y = ny as u16;
+            self.clamp_x_to_row();
+        }
+        self.anchor = None;
+        self.mode = Mode::Normal;
+    }
+
+    /// Yank the current Visual selection and return to Normal.
+    fn yank_selection(&mut self) {
+        if let Some((from, to)) = self.selection_range() {
+            self.register = Register::Char(self.document.text_in_range(from, to));
+            self.position_x = from.0 as u16;
+            self.position_y = from.1 as u16;
             self.clamp_x_to_row();
         }
         self.anchor = None;

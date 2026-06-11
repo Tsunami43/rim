@@ -79,6 +79,9 @@ impl Keymap {
         bind(KeyCode::Char('r'), none, Action::ReplaceChar);
         bind(KeyCode::Char('d'), none, Action::StartOperator(Operator::Delete));
         bind(KeyCode::Char('c'), none, Action::StartOperator(Operator::Change));
+        bind(KeyCode::Char('y'), none, Action::StartOperator(Operator::Yank));
+        bind(KeyCode::Char('p'), none, Action::Paste);
+        bind(KeyCode::Char('P'), none, Action::PasteBefore);
 
         // system
         bind(KeyCode::Char('s'), ctrl, Action::Save);

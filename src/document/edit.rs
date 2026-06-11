@@ -118,6 +118,63 @@ impl Document {
         self.rows[y].push_str(trimmed);
         self.dirty = true;
     }
+
+    /// The text in the half-open range `[from, to)` without removing it
+    /// (used by yank). Multi-line ranges keep `\n` separators.
+    pub fn text_in_range(&self, from: (usize, usize), to: (usize, usize)) -> String {
+        let (start, end) = if (from.1, from.0) <= (to.1, to.0) {
+            (from, to)
+        } else {
+            (to, from)
+        };
+        let (sx, sy) = start;
+        let (ex, ey) = end;
+
+        if sy == ey {
+            self.rows
+                .get(sy)
+                .map_or(String::new(), |r| r.chars().skip(sx).take(ex.saturating_sub(sx)).collect())
+        } else {
+            let mut out = String::new();
+            if let Some(r) = self.rows.get(sy) {
+                out.extend(r.chars().skip(sx));
+            }
+            out.push('\n');
+            for row in self.rows.iter().take(ey).skip(sy + 1) {
+                out.push_str(row);
+                out.push('\n');
+            }
+            if let Some(r) = self.rows.get(ey) {
+                out.extend(r.chars().take(ex));
+            }
+            out
+        }
+    }
+
+    /// Insert `text` (which may contain newlines) at `(x, y)`.
+    pub fn insert_str(&mut self, x: usize, y: usize, text: &str) {
+        if self.rows.is_empty() {
+            self.rows.push(String::new());
+        }
+        let y = y.min(self.rows.len() - 1);
+        let chars: Vec<char> = self.rows[y].chars().collect();
+        let xi = x.min(chars.len());
+        let head: String = chars[..xi].iter().collect();
+        let tail: String = chars[xi..].iter().collect();
+
+        let parts: Vec<&str> = text.split('\n').collect();
+        if parts.len() == 1 {
+            self.rows[y] = format!("{head}{text}{tail}");
+        } else {
+            let mut new_rows = vec![format!("{head}{}", parts[0])];
+            for p in &parts[1..parts.len() - 1] {
+                new_rows.push((*p).to_string());
+            }
+            new_rows.push(format!("{}{tail}", parts[parts.len() - 1]));
+            self.rows.splice(y..=y, new_rows);
+        }
+        self.dirty = true;
+    }
 }
 
 #[cfg(test)]
@@ -198,5 +255,31 @@ mod tests {
         let mut d = Document::from_lines(&["a", "b"]);
         d.insert_row(1, "x".to_string());
         assert_eq!(d.lines(), vec!["a", "x", "b"]);
+    }
+
+    #[test]
+    fn text_in_range_single_line() {
+        let d = Document::from_lines(&["foo bar baz"]);
+        assert_eq!(d.text_in_range((0, 0), (4, 0)), "foo ");
+    }
+
+    #[test]
+    fn text_in_range_multi_line() {
+        let d = Document::from_lines(&["hello", "world"]);
+        assert_eq!(d.text_in_range((2, 0), (2, 1)), "llo\nwo");
+    }
+
+    #[test]
+    fn insert_str_single_line() {
+        let mut d = Document::from_lines(&["ad"]);
+        d.insert_str(1, 0, "bc");
+        assert_eq!(d.lines(), vec!["abcd"]);
+    }
+
+    #[test]
+    fn insert_str_with_newline_splits() {
+        let mut d = Document::from_lines(&["ad"]);
+        d.insert_str(1, 0, "b\nc");
+        assert_eq!(d.lines(), vec!["ab", "cd"]);
     }
 }
