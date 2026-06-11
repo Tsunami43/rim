@@ -70,6 +70,10 @@ impl Keymap {
         bind(KeyCode::Char('O'), none, Action::OpenLineAbove);
         bind(KeyCode::Char(':'), none, Action::EnterCommand);
         bind(KeyCode::Char('v'), none, Action::EnterVisual);
+        bind(KeyCode::Char('/'), none, Action::EnterSearch);
+        bind(KeyCode::Char('n'), none, Action::SearchNext);
+        bind(KeyCode::Char('N'), none, Action::SearchPrev);
+        bind(KeyCode::Char('*'), none, Action::SearchWord);
 
         // editing
         bind(KeyCode::Char('x'), none, Action::DeleteChar);

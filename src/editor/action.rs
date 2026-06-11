@@ -31,6 +31,10 @@ pub enum Action {
     OpenLineAbove,   // O
     EnterCommand,    // :
     EnterVisual,     // v
+    EnterSearch,     // /
+    SearchNext,      // n
+    SearchPrev,      // N
+    SearchWord,      // *
     // editing
     DeleteChar,              // x
     DeleteToLineEnd,         // D
@@ -187,6 +191,13 @@ impl Editor {
                 self.anchor = Some((self.position_x, self.position_y));
                 self.mode = Mode::Visual;
             }
+            Action::EnterSearch => {
+                self.command_line.clear();
+                self.mode = Mode::Search;
+            }
+            Action::SearchNext => self.search_next(),
+            Action::SearchPrev => self.search_prev(),
+            Action::SearchWord => self.search_word(),
             Action::DeleteChar => {
                 let x = self.position_x as usize;
                 let y = self.position_y as usize;

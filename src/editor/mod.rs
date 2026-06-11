@@ -18,6 +18,7 @@ enum Mode {
     Insert,
     Command,
     Visual,
+    Search,
 }
 
 /// A pending operator waiting for a motion target (e.g. `d` in `dw`).
@@ -57,6 +58,8 @@ pub struct Editor {
     /// History of document snapshots for undo/redo.
     undo_stack: Vec<Snapshot>,
     redo_stack: Vec<Snapshot>,
+    /// Last search pattern (reused by `n`/`N`/`*`).
+    last_search: String,
     command_line: CommandLine,
     keymap: Keymap,
 }
@@ -89,8 +92,46 @@ impl Editor {
             register: Register::None,
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
+            last_search: String::new(),
             command_line: CommandLine::new(),
             keymap: Keymap::default_vim(),
+        }
+    }
+
+    /// Jump to the next match of the last search pattern (`n`).
+    pub fn search_next(&mut self) {
+        if self.last_search.is_empty() {
+            return;
+        }
+        let from = (self.position_x as usize, self.position_y as usize);
+        if let Some((x, y)) = self.document.find(&self.last_search, from) {
+            self.position_x = x as u16;
+            self.position_y = y as u16;
+            self.clamp_x_to_row();
+        }
+    }
+
+    /// Jump to the previous match of the last search pattern (`N`).
+    pub fn search_prev(&mut self) {
+        if self.last_search.is_empty() {
+            return;
+        }
+        let from = (self.position_x as usize, self.position_y as usize);
+        if let Some((x, y)) = self.document.rfind(&self.last_search, from) {
+            self.position_x = x as u16;
+            self.position_y = y as u16;
+            self.clamp_x_to_row();
+        }
+    }
+
+    /// Search for the word under the cursor (`*`).
+    pub fn search_word(&mut self) {
+        if let Some(word) = self
+            .document
+            .word_at(self.position_x as usize, self.position_y as usize)
+        {
+            self.last_search = word;
+            self.search_next();
         }
     }
 
@@ -164,6 +205,7 @@ impl Editor {
             Mode::Insert => self.handler_insert(key),
             Mode::Command => self.handler_command(key),
             Mode::Visual => self.handler_visual(key),
+            Mode::Search => self.handler_search(key),
         }
     }
 

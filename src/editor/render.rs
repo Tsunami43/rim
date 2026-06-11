@@ -46,10 +46,15 @@ impl Editor {
             }
         }
 
-        // Bottom line: the `:` input while in Command mode, otherwise status
+        // Bottom line: the `:`/`/` input prompt, otherwise the status line
+        let prompt = match self.mode {
+            Mode::Command => Some(':'),
+            Mode::Search => Some('/'),
+            _ => None,
+        };
         queue!(out, Clear(ClearType::CurrentLine))?;
-        if self.mode == Mode::Command {
-            write!(out, ":{}", self.command_line.as_str())?;
+        if let Some(p) = prompt {
+            write!(out, "{p}{}", self.command_line.as_str())?;
         } else {
             let name = self.document.filename().unwrap_or("[No Name]");
             let modified = if self.document.is_dirty() { " [+]" } else { "" };
@@ -62,8 +67,9 @@ impl Editor {
             write!(out, "{status}")?;
         }
 
-        // Place the cursor: on the command line in Command mode, else in the text
-        if self.mode == Mode::Command {
+        // Place the cursor: on the prompt line while typing a command/search,
+        // otherwise back in the text
+        if prompt.is_some() {
             let col = self.command_line.as_str().chars().count() as u16 + 1;
             queue!(out, MoveTo(col, rows - 1), Show)?;
         } else {

@@ -44,6 +44,31 @@ impl Editor {
         }
     }
 
+    /// Handle a key in Search mode (typing the pattern after `/`).
+    pub fn handler_search(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Esc => {
+                self.command_line.clear();
+                self.mode = Mode::Normal;
+            }
+            KeyCode::Backspace => {
+                if self.command_line.is_empty() {
+                    self.mode = Mode::Normal;
+                } else {
+                    self.command_line.pop();
+                }
+            }
+            KeyCode::Enter => {
+                self.last_search = self.command_line.as_str().to_string();
+                self.command_line.clear();
+                self.mode = Mode::Normal;
+                self.search_next();
+            }
+            KeyCode::Char(c) => self.command_line.push(c),
+            _ => {}
+        }
+    }
+
     /// Handle a key in Insert mode (text input, Backspace, Enter, Esc).
     pub fn handler_insert(&mut self, key: KeyEvent) {
         match key.code {
