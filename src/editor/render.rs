@@ -11,6 +11,8 @@ use crossterm::{
 };
 
 impl Editor {
+    /// Redraw the whole frame: document rows, status line, cursor.
+    /// Everything is queued into one buffer and flushed once to avoid flicker.
     pub fn refresh_screen(&mut self) -> Result<()> {
         self.scroll();
         let (cols, rows) = size()?;
@@ -59,6 +61,7 @@ impl Editor {
         Ok(())
     }
 
+    /// Adjust the viewport offset so the cursor stays on screen.
     pub fn scroll(&mut self) {
         let (cols, rows) = size().unwrap();
         let text_rows = rows - 1;

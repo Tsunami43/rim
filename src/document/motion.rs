@@ -1,16 +1,19 @@
 use super::Document;
 
 impl Document {
+    /// Character class: 0 = whitespace, 1 = word, 2 = punctuation.
+    /// With `big`, punctuation counts as a word char (W/B/E behaviour).
     fn class_of(&self, c: char, big: bool) -> u8 {
         if c.is_whitespace() {
             0
-        } else if !big && !(c.is_alphanumeric() || c == '_') {
+        } else if !(big || c.is_alphanumeric() || c == '_') {
             2
         } else {
             1
         }
     }
 
+    /// Start of the next word from `(x, y)`. `big` = WORD (whitespace-delimited).
     pub fn next_word(&self, x: usize, y: usize, big: bool) -> (usize, usize) {
         let line = match self.rows.get(y) {
             Some(l) => l,
@@ -42,6 +45,7 @@ impl Document {
         (i, y)
     }
 
+    /// End of the current/next word from `(x, y)`.
     pub fn next_word_end(&self, x: usize, y: usize, big: bool) -> (usize, usize) {
         let mut y = y;
         let mut i = x + 1;
@@ -77,6 +81,7 @@ impl Document {
         }
     }
 
+    /// Start of the previous word from `(x, y)`.
     pub fn previous_word(&self, x: usize, y: usize, big: bool) -> (usize, usize) {
         let mut y = y;
         let mut i = x;

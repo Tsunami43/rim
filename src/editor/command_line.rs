@@ -1,3 +1,4 @@
+/// A parsed `:` command.
 #[derive(Clone, Debug, Copy, PartialEq)]
 pub enum Command {
     Save,
@@ -6,6 +7,7 @@ pub enum Command {
     Unknown,
 }
 
+/// The text typed after `:` in command mode.
 pub struct CommandLine {
     buffer: String,
 }
@@ -17,10 +19,12 @@ impl CommandLine {
         }
     }
 
+    /// Whether nothing has been typed yet.
     pub fn is_empty(&self) -> bool {
         self.buffer.is_empty()
     }
 
+    /// Append a typed character.
     pub fn push(&mut self, c: char) {
         self.buffer.push(c);
     }
@@ -29,14 +33,17 @@ impl CommandLine {
     //     &self.buffer
     // }
 
+    /// Remove the last character (Backspace).
     pub fn pop(&mut self) {
         self.buffer.pop();
     }
 
+    /// Reset the buffer.
     pub fn clear(&mut self) {
         self.buffer.clear();
     }
 
+    /// Interpret the typed text as a command.
     pub fn parse(&self) -> Command {
         match self.buffer.as_str() {
             "w" => Command::Save,

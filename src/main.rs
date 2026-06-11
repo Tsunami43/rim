@@ -3,6 +3,9 @@ mod editor;
 use crate::editor::Editor;
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 use std::{self, io::Result};
+
+/// RAII guard: enables terminal raw mode on creation and restores it on drop,
+/// so the terminal is reset even if the program panics.
 struct RawModeGuard;
 impl RawModeGuard {
     fn new() -> Result<Self> {
