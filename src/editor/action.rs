@@ -39,6 +39,8 @@ pub enum Action {
     ReplaceChar,             // r (waits for the replacement char)
     Paste,                   // p (after the cursor)
     PasteBefore,             // P (before the cursor)
+    Undo,                    // u
+    Redo,                    // ctrl+r
     StartOperator(Operator), // d/c/y (starts operator-pending)
     // system
     Save,
@@ -67,11 +69,36 @@ impl Action {
                 | Action::HalfPageDown
         )
     }
+
+    /// Whether this action changes the document (used to snapshot for undo).
+    /// `StartOperator` is excluded: the mutation happens later in
+    /// `apply_operator`, which snapshots itself.
+    pub fn is_mutating(&self) -> bool {
+        matches!(
+            self,
+            Action::DeleteChar
+                | Action::DeleteToLineEnd
+                | Action::JoinLines
+                | Action::ToggleCase
+                | Action::ReplaceChar
+                | Action::Paste
+                | Action::PasteBefore
+                | Action::OpenLineBelow
+                | Action::OpenLineAbove
+                | Action::InsertBefore
+                | Action::InsertAfter
+                | Action::InsertLineStart
+                | Action::InsertLineEnd
+        )
+    }
 }
 
 impl Editor {
     /// The single place where an action turns into an effect.
     pub fn execute_action(&mut self, action: Action) {
+        if action.is_mutating() {
+            self.push_undo();
+        }
         match action {
             Action::MoveLeft => self.position_x = self.position_x.saturating_sub(1),
             Action::MoveRight => {
@@ -222,6 +249,8 @@ impl Editor {
             Action::ReplaceChar => self.awaiting_replace = true,
             Action::Paste => self.paste(false),
             Action::PasteBefore => self.paste(true),
+            Action::Undo => self.undo(),
+            Action::Redo => self.redo(),
             // arm the operator; its target key is handled on the next press
             Action::StartOperator(op) => self.pending_op = Some(op),
             Action::Save => {

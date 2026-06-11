@@ -95,6 +95,11 @@ impl Editor {
         let x = self.position_x as usize;
         let y = self.position_y as usize;
 
+        // d/c mutate the buffer, so snapshot for undo (yank does not)
+        if op != Operator::Yank {
+            self.push_undo();
+        }
+
         // doubled operator -> linewise (dd / cc / yy)
         let doubled = matches!(
             (op, key.code),
@@ -191,6 +196,7 @@ impl Editor {
     /// Delete the current Visual selection (inclusive) and return to Normal.
     fn delete_selection(&mut self) {
         if let Some((from, to)) = self.selection_range() {
+            self.push_undo();
             self.register = Register::Char(self.document.text_in_range(from, to));
             let (nx, ny) = self.document.delete_range(from, to);
             self.position_x = nx as u16;

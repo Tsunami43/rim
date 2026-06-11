@@ -4,6 +4,7 @@ mod motion;
 mod search;
 
 /// An in-memory text buffer: the lines plus file metadata.
+#[derive(Clone)]
 pub struct Document {
     rows: Vec<String>,
     filename: Option<String>,

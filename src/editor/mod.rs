@@ -54,8 +54,18 @@ pub struct Editor {
     anchor: Option<(u16, u16)>,
     /// Yank/delete register.
     register: Register,
+    /// History of document snapshots for undo/redo.
+    undo_stack: Vec<Snapshot>,
+    redo_stack: Vec<Snapshot>,
     command_line: CommandLine,
     keymap: Keymap,
+}
+
+/// A saved document state plus cursor, for undo/redo.
+struct Snapshot {
+    document: Document,
+    position_x: u16,
+    position_y: u16,
 }
 
 impl Editor {
@@ -77,8 +87,53 @@ impl Editor {
             offset_y: 0,
             anchor: None,
             register: Register::None,
+            undo_stack: Vec::new(),
+            redo_stack: Vec::new(),
             command_line: CommandLine::new(),
             keymap: Keymap::default_vim(),
+        }
+    }
+
+    /// Save the current state for undo, and clear the redo history.
+    /// Call this right before a mutating change.
+    pub fn push_undo(&mut self) {
+        self.undo_stack.push(Snapshot {
+            document: self.document.clone(),
+            position_x: self.position_x,
+            position_y: self.position_y,
+        });
+        self.redo_stack.clear();
+    }
+
+    /// Restore the previous state (`u`).
+    pub fn undo(&mut self) {
+        if let Some(prev) = self.undo_stack.pop() {
+            self.redo_stack.push(Snapshot {
+                document: self.document.clone(),
+                position_x: self.position_x,
+                position_y: self.position_y,
+            });
+            self.document = prev.document;
+            self.position_x = prev.position_x;
+            self.position_y = prev.position_y;
+            self.clamp_y_to_doc();
+            self.clamp_x_to_row();
+        }
+    }
+
+    /// Re-apply an undone state (`Ctrl-r`).
+    pub fn redo(&mut self) {
+        if let Some(next) = self.redo_stack.pop() {
+            self.undo_stack.push(Snapshot {
+                document: self.document.clone(),
+                position_x: self.position_x,
+                position_y: self.position_y,
+            });
+            self.document = next.document;
+            self.position_x = next.position_x;
+            self.position_y = next.position_y;
+            self.clamp_y_to_doc();
+            self.clamp_x_to_row();
         }
     }
 

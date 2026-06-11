@@ -82,6 +82,8 @@ impl Keymap {
         bind(KeyCode::Char('y'), none, Action::StartOperator(Operator::Yank));
         bind(KeyCode::Char('p'), none, Action::Paste);
         bind(KeyCode::Char('P'), none, Action::PasteBefore);
+        bind(KeyCode::Char('u'), none, Action::Undo);
+        bind(KeyCode::Char('r'), ctrl, Action::Redo);
 
         // system
         bind(KeyCode::Char('s'), ctrl, Action::Save);
