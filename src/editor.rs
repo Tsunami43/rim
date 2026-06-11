@@ -206,48 +206,73 @@ impl Editor {
                 self.clamp_y_to_doc();
                 self.clamp_x_to_row();
             }
-            // KeyCode::Char('b') => {
-            //     let (x, y) = self
-            //         .document
-            //         .previous_word(self.position_x, self.position_y, false);
-            //     self.position_x = x;
-            //     self.position_y = y;
-            // }
-            // KeyCode::Char('B') => {
-            //     let (x, y) = self
-            //         .document
-            //         .previous_word(self.position_x, self.position_y, true);
-            //     self.position_x = x;
-            //     self.position_y = y;
-            // }
-            // KeyCode::Char('w') => {
-            //     let (x, y) = self
-            //         .document
-            //         .next_word(self.position_x, self.position_y, false);
-            //     self.position_x = x;
-            //     self.position_y = y;
-            // }
-            // KeyCode::Char('W') => {
-            //     let (x, y) = self
-            //         .document
-            //         .next_word(self.position_x, self.position_y, true);
-            //     self.position_x = x;
-            //     self.position_y = y;
-            // }
-            // KeyCode::Char('e') => {
-            //     let (x, y) = self
-            //         .document
-            //         .next_word_end(self.position_x, self.position_y, false);
-            //     self.position_x = x;
-            //     self.position_y = y;
-            // }
-            // KeyCode::Char('E') => {
-            //     let (x, y) = self
-            //         .document
-            //         .next_word_end(self.position_x, self.position_y, true);
-            //     self.position_x = x;
-            //     self.position_y = y;
-            // }
+            KeyCode::Char('b') => {
+                let target = self
+                    .document
+                    .previous_word(self.position_x, self.position_y, false);
+                let (nx, ny) = self
+                    .document
+                    .delete_range((self.position_x, self.position_y), target);
+                self.position_x = nx;
+                self.position_y = ny;
+                self.clamp_x_to_row();
+            }
+            KeyCode::Char('B') => {
+                let target = self
+                    .document
+                    .previous_word(self.position_x, self.position_y, true);
+                let (nx, ny) = self
+                    .document
+                    .delete_range((self.position_x, self.position_y), target);
+                self.position_x = nx;
+                self.position_y = ny;
+                self.clamp_x_to_row();
+            }
+            KeyCode::Char('w') => {
+                let target = self
+                    .document
+                    .next_word(self.position_x, self.position_y, false);
+                let (nx, ny) = self
+                    .document
+                    .delete_range((self.position_x, self.position_y), target);
+                self.position_x = nx;
+                self.position_y = ny;
+                self.clamp_x_to_row();
+            }
+
+            KeyCode::Char('W') => {
+                let target = self
+                    .document
+                    .next_word(self.position_x, self.position_y, true);
+                let (nx, ny) = self
+                    .document
+                    .delete_range((self.position_x, self.position_y), target);
+                self.position_x = nx;
+                self.position_y = ny;
+                self.clamp_x_to_row();
+            }
+            KeyCode::Char('e') => {
+                let target = self
+                    .document
+                    .next_word_end(self.position_x, self.position_y, false);
+                let (nx, ny) = self
+                    .document
+                    .delete_range((self.position_x, self.position_y), target);
+                self.position_x = nx;
+                self.position_y = ny;
+                self.clamp_x_to_row();
+            }
+            KeyCode::Char('E') => {
+                let target = self
+                    .document
+                    .next_word_end(self.position_x, self.position_y, true);
+                let (nx, ny) = self
+                    .document
+                    .delete_range((self.position_x, self.position_y), target);
+                self.position_x = nx;
+                self.position_y = ny;
+                self.clamp_x_to_row();
+            }
             _ => {}
         }
     }

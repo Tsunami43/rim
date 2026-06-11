@@ -25,17 +25,13 @@ impl Document {
         }
     }
 
-    pub fn remove_line(&mut self, y: u16) {
-        if self.rows.get(y as usize).is_some() {
-            self.rows.remove(y as usize);
+    pub fn save(&mut self) -> Result<()> {
+        if let Some(name) = &self.filename {
+            let contents = self.rows.join("\n");
+            std::fs::write(name, contents)?;
+            self.dirty = false;
         }
-        self.dirty = true;
-    }
-    pub fn truncate(&mut self, x: u16, y: u16) {
-        if let Some(row) = self.rows.get_mut(y as usize) {
-            row.truncate(x as usize);
-        }
-        self.dirty = true;
+        Ok(())
     }
 
     pub fn insert_char(&mut self, x: u16, y: u16, ch: char) {
@@ -55,6 +51,16 @@ impl Document {
         self.dirty = true;
     }
 
+    pub fn join_line(&mut self, y: u16) {
+        let y = y as usize;
+        if y == 0 || y >= self.rows.len() {
+            return;
+        }
+        let current = self.rows.remove(y);
+        self.rows[y - 1].push_str(&current);
+        self.dirty = true;
+    }
+
     pub fn line_len(&self, y: u16) -> u16 {
         self.rows.get(y as usize).map_or(0, |row| row.len()) as u16
     }
@@ -70,23 +76,42 @@ impl Document {
         self.dirty = true;
     }
 
-    pub fn join_line(&mut self, y: u16) {
-        let y = y as usize;
-        if y == 0 || y >= self.rows.len() {
-            return;
+    pub fn remove_line(&mut self, y: u16) {
+        if self.rows.get(y as usize).is_some() {
+            self.rows.remove(y as usize);
         }
-        let current = self.rows.remove(y);
-        self.rows[y - 1].push_str(&current);
+        self.dirty = true;
+    }
+    pub fn truncate(&mut self, x: u16, y: u16) {
+        if let Some(row) = self.rows.get_mut(y as usize) {
+            row.truncate(x as usize);
+        }
         self.dirty = true;
     }
 
-    pub fn save(&mut self) -> Result<()> {
-        if let Some(name) = &self.filename {
-            let contents = self.rows.join("\n");
-            std::fs::write(name, contents)?;
-            self.dirty = false;
+    pub fn delete_range(&mut self, from: (u16, u16), to: (u16, u16)) -> (u16, u16) {
+        let (start, end) = if (from.1, from.0) <= (to.1, to.0) {
+            (from, to)
+        } else {
+            (to, from)
+        };
+        let (sx, sy) = (start.0 as usize, start.1 as usize);
+        let (ex, ey) = (end.0 as usize, end.1 as usize);
+
+        if sy == ey {
+            if let Some(row) = self.rows.get_mut(sy) {
+                let head: String = row.chars().take(sx).collect();
+                let tail: String = row.chars().skip(ex).collect();
+                *row = head + &tail;
+            }
+        } else if ey < self.rows.len() {
+            let head: String = self.rows[sy].chars().take(sx).collect();
+            let tail: String = self.rows[ey].chars().skip(ex).collect();
+            self.rows.drain((sy + 1)..=ey);
+            self.rows[sy] = head + &tail;
         }
-        Ok(())
+        self.dirty = true;
+        (start.0, start.1)
     }
 
     fn class_of(&self, c: char, big: bool) -> u8 {
