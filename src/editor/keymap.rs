@@ -78,6 +78,7 @@ impl Keymap {
         bind(KeyCode::Char('~'), none, Action::ToggleCase);
         bind(KeyCode::Char('r'), none, Action::ReplaceChar);
         bind(KeyCode::Char('d'), none, Action::StartOperator(Operator::Delete));
+        bind(KeyCode::Char('c'), none, Action::StartOperator(Operator::Change));
 
         // system
         bind(KeyCode::Char('s'), ctrl, Action::Save);

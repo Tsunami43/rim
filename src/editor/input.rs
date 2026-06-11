@@ -76,95 +76,72 @@ impl Editor {
         }
     }
 
-    /// Handle the motion key after `d` (dd, dw, db, de and big variants).
-    pub fn handler_pending_d(&mut self, key: KeyEvent) {
-        match key.code {
-            // Delete current row
-            KeyCode::Char('d') => {
-                self.document.remove_line(self.position_y as usize);
-                self.clamp_y_to_doc();
-                self.clamp_x_to_row();
-            }
-            KeyCode::Char('b') => {
-                let target = self.document.previous_word(
-                    self.position_x as usize,
-                    self.position_y as usize,
-                    false,
-                );
-                let (nx, ny) = self
-                    .document
-                    .delete_range((self.position_x as usize, self.position_y as usize), target);
-                self.position_x = nx as u16;
-                self.position_y = ny as u16;
-                self.clamp_x_to_row();
-            }
-            KeyCode::Char('B') => {
-                let target = self.document.previous_word(
-                    self.position_x as usize,
-                    self.position_y as usize,
-                    true,
-                );
-                let (nx, ny) = self
-                    .document
-                    .delete_range((self.position_x as usize, self.position_y as usize), target);
-                self.position_x = nx as u16;
-                self.position_y = ny as u16;
-                self.clamp_x_to_row();
-            }
-            KeyCode::Char('w') => {
-                let target = self.document.next_word(
-                    self.position_x as usize,
-                    self.position_y as usize,
-                    false,
-                );
-                let (nx, ny) = self
-                    .document
-                    .delete_range((self.position_x as usize, self.position_y as usize), target);
-                self.position_x = nx as u16;
-                self.position_y = ny as u16;
-                self.clamp_x_to_row();
-            }
+    /// For word-forward operators (`dw`/`cw`): keep the deleted range inside
+    /// the current line, unless the line is empty (vim does not join lines on
+    /// `dw` over the last word).
+    fn clamp_target_to_line(&self, target: (usize, usize)) -> (usize, usize) {
+        let y = self.position_y as usize;
+        let len = self.document.line_len(y);
+        if target.1 != y && len > 0 {
+            (len, y)
+        } else {
+            target
+        }
+    }
 
-            KeyCode::Char('W') => {
-                let target = self.document.next_word(
-                    self.position_x as usize,
-                    self.position_y as usize,
-                    true,
-                );
-                let (nx, ny) = self
-                    .document
-                    .delete_range((self.position_x as usize, self.position_y as usize), target);
-                self.position_x = nx as u16;
-                self.position_y = ny as u16;
-                self.clamp_x_to_row();
+    /// Apply an operator (`d` or `c`) to the motion given by `key`
+    /// (dd/cc, dw/cw, db, de and big variants).
+    pub fn apply_operator(&mut self, op: Operator, key: KeyEvent) {
+        let x = self.position_x as usize;
+        let y = self.position_y as usize;
+
+        // doubled operator -> linewise (dd / cc)
+        let doubled = matches!(
+            (op, key.code),
+            (Operator::Delete, KeyCode::Char('d')) | (Operator::Change, KeyCode::Char('c'))
+        );
+        if doubled {
+            match op {
+                Operator::Delete => {
+                    self.document.remove_line(y);
+                    self.clamp_y_to_doc();
+                    self.clamp_x_to_row();
+                }
+                Operator::Change => {
+                    // clear the line but keep it, then insert at column 0
+                    self.document.truncate(0, y);
+                    self.position_x = 0;
+                    self.mode = Mode::Insert;
+                }
             }
+            return;
+        }
+
+        // resolve the target position of the motion
+        let target = match key.code {
+            KeyCode::Char('w') => Some(self.clamp_target_to_line(self.document.next_word(x, y, false))),
+            KeyCode::Char('W') => Some(self.clamp_target_to_line(self.document.next_word(x, y, true))),
+            KeyCode::Char('b') => Some(self.document.previous_word(x, y, false)),
+            KeyCode::Char('B') => Some(self.document.previous_word(x, y, true)),
             KeyCode::Char('e') => {
-                let target = self.document.next_word_end(
-                    self.position_x as usize,
-                    self.position_y as usize,
-                    false,
-                );
-                let (nx, ny) = self
-                    .document
-                    .delete_range((self.position_x as usize, self.position_y as usize), target);
-                self.position_x = nx as u16;
-                self.position_y = ny as u16;
-                self.clamp_x_to_row();
+                let (ex, ey) = self.document.next_word_end(x, y, false);
+                Some((ex + 1, ey)) // `e` is inclusive
             }
             KeyCode::Char('E') => {
-                let target = self.document.next_word_end(
-                    self.position_x as usize,
-                    self.position_y as usize,
-                    true,
-                );
-                let (nx, ny) = self
-                    .document
-                    .delete_range((self.position_x as usize, self.position_y as usize), target);
-                self.position_x = nx as u16;
-                self.position_y = ny as u16;
-                self.clamp_x_to_row();
+                let (ex, ey) = self.document.next_word_end(x, y, true);
+                Some((ex + 1, ey))
             }
-            _ => {}
+            _ => None,
+        };
+
+        if let Some(target) = target {
+            let (nx, ny) = self.document.delete_range((x, y), target);
+            self.position_x = nx as u16;
+            self.position_y = ny as u16;
+            self.clamp_x_to_row();
+            if op == Operator::Change {
+                self.mode = Mode::Insert;
+            }
         }
     }
 
@@ -220,11 +197,9 @@ impl Editor {
             return;
         }
 
-        // 1) waiting for an operator target (dw, dd, ...)
+        // 1) waiting for an operator target (dw, dd, cw, cc, ...)
         if let Some(op) = self.pending_op.take() {
-            match op {
-                Operator::Delete => self.handler_pending_d(key),
-            }
+            self.apply_operator(op, key);
             return;
         }
 

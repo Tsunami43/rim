@@ -24,6 +24,7 @@ enum Mode {
 #[derive(Clone, Debug, Copy, PartialEq)]
 pub enum Operator {
     Delete,
+    Change,
 }
 
 /// The editor: owns the document, cursor/viewport state, mode and keymap.
